@@ -1,0 +1,1342 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0F1B2D"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Cardiac Scores"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style></head><body><title>Cardiac Scores</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+
+<style>/* Layout: clinical instrument — patient profile column on the left (one entry feeds every score),
+   score cards on the right grouped by clinical scenario; phones switch between the two with a view bar.
+   Palette: Prof. Baghdady's navy / gold / cyan system. System fonts only, so the app works fully offline. */
+:root{
+  --navy:#1E3A5F; --navy-2:#0F1B2D; --gold:#C8962E; --cyan:#1A9BB5;
+  --bg:#EDF1F5; --panel:#FFFFFF; --ink:#15233A; --muted:#58697E; --line:#D3DCE6; --field:#F6F8FB;
+  --chip:#E4EBF3; --chip-on:#1E3A5F; --chip-on-ink:#FFFFFF; --focus:#1A9BB5;
+  --c0:#2E8B57; --c1:#B8860B; --c2:#D9682B; --c3:#C0392B; --cx:#1A9BB5;
+  --c0-bg:#E6F3EC; --c1-bg:#FBF3DE; --c2-bg:#FCEDE3; --c3-bg:#FBE7E5; --cx-bg:#E3F3F7;
+  --warn:#9A5B00; --warn-bg:#FFF5E0; --act-bg:#EEF3F9;
+  --f-ui:Calibri, Carlito, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --f-num:"Segoe UI", Calibri, system-ui, -apple-system, Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0B1522; --panel:#132235; --ink:#E3EAF3; --muted:#93A4B8; --line:#25394F; --field:#0F1C2C;
+  --chip:#1C2F45; --chip-on:#C8962E; --chip-on-ink:#0F1B2D;
+  --c0:#4FBF84; --c1:#E0B13A; --c2:#F08A50; --c3:#F06A5C; --cx:#3FC0D8;
+  --c0-bg:#123326; --c1-bg:#3A3112; --c2-bg:#3C2416; --c3-bg:#3D1B19; --cx-bg:#10323B;
+  --warn:#F2C06B; --warn-bg:#352812; --act-bg:#182B42; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0B1522; --panel:#132235; --ink:#E3EAF3; --muted:#93A4B8; --line:#25394F; --field:#0F1C2C;
+  --chip:#1C2F45; --chip-on:#C8962E; --chip-on-ink:#0F1B2D;
+  --c0:#4FBF84; --c1:#E0B13A; --c2:#F08A50; --c3:#F06A5C; --cx:#3FC0D8;
+  --c0-bg:#123326; --c1-bg:#3A3112; --c2-bg:#3C2416; --c3-bg:#3D1B19; --cx-bg:#10323B;
+  --warn:#F2C06B; --warn-bg:#352812; --act-bg:#182B42; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.4}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--navy-2)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.pad{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--navy-2);color:#fff;border-bottom:3px solid var(--gold)}
+.top .in{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding-block:9px;max-width:1500px;margin:0 auto}
+.brand{display:flex;flex-direction:column;min-width:0;margin-right:auto}
+.brand b{font-size:18px;letter-spacing:.2px}
+.brand span{font-size:12px;color:#B5C3D4}
+.search{flex:1 1 220px;max-width:380px;display:flex;align-items:center;background:#1B2D45;border:1px solid #34506F;border-radius:7px}
+.search input{flex:1;min-width:0;background:transparent;border:0;color:#fff;padding:7px 10px;font-size:14.5px}
+.search input::placeholder{color:#9AAEC5}
+.tb{display:flex;gap:6px;flex-wrap:wrap}
+.tb button{font-size:13px;background:transparent;color:#fff;border:1px solid #3E5776;border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}
+.tb button:hover{border-color:var(--gold)}
+.tb button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:var(--navy-2);font-weight:700}
+
+/* view switch (phones) */
+.views{display:none;background:var(--navy)}
+.views .in{display:flex;max-width:1500px;margin:0 auto}
+.views button{flex:1;background:none;border:0;color:#C6D3E2;padding:10px 6px 8px;border-bottom:3px solid transparent;cursor:pointer;font-size:14px}
+.views button[aria-pressed="true"]{color:#fff;border-bottom-color:var(--cyan);font-weight:700}
+
+.wrap{display:grid;grid-template-columns:minmax(300px,360px) minmax(0,1fr);gap:18px;padding-block:16px 48px;max-width:1500px;margin:0 auto}
+@media (max-width:900px){
+  .wrap{grid-template-columns:minmax(0,1fr)}
+  .views{display:block;position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+  .top{position:static}
+  body[data-view="patient"] #scorecol,body[data-view="patient"] #summary{display:none}
+  body[data-view="scores"] #profile,body[data-view="summary"] #profile{display:none}
+  .colhead .vt{display:none}
+}
+body[data-view="summary"] #scorecol{display:none}
+body:not([data-view="summary"]) #summary{display:none}
+
+/* profile */
+#profile{display:flex;flex-direction:column;gap:10px;min-width:0;align-self:start}
+@media (min-width:901px){#profile{position:sticky;top:calc(env(safe-area-inset-top,0px) + 74px);max-height:calc(100vh - 90px);overflow:auto;padding-right:4px}}
+.example{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border:1px dashed var(--gold);background:var(--panel);border-radius:8px;padding:8px 11px;font-size:13px}
+.grp{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.grp>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;font-size:11.5px;letter-spacing:.9px;text-transform:uppercase;font-weight:700;color:var(--muted)}
+.grp>summary::-webkit-details-marker{display:none}
+.grp>summary::after{content:"";width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);margin-top:-3px;transition:transform .15s}
+.grp[open]>summary::after{transform:rotate(-135deg);margin-top:3px}
+.grp .cnt{margin-left:auto;letter-spacing:0;text-transform:none;font-weight:400}
+.grp .body{padding:0 12px 12px;display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:9px}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.f>label,.f>.lb{font-size:12px;color:var(--muted)}
+.f .box{display:flex;align-items:center;background:var(--field);border:1px solid var(--line);border-radius:6px}
+.f select{flex:1;min-width:0;background:transparent;border:0;padding:7px 8px;font-size:14.5px;width:100%}
+.f.wide{grid-column:1/-1}
+.f input{background:transparent;border:0;padding:7px 8px;width:100%;min-width:0;font-size:15px;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.f .u{font-size:11.5px;color:var(--muted);padding-right:8px;white-space:nowrap}
+.f.need .box{border-color:var(--c2);box-shadow:0 0 0 2px var(--c2-bg)}
+.f.need>label{color:var(--c2);font-weight:700}
+.f.out .box{border-color:var(--c1)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13.5px;background:var(--chip);border:1px solid transparent;border-radius:6px;padding:6px 10px;cursor:pointer;text-align:left;line-height:1.25}
+.chip[aria-pressed="true"]{background:var(--chip-on);color:var(--chip-on-ink)}
+.chip.auto{border-style:dashed;border-color:var(--muted)}
+.chip .tag{font-size:11px;opacity:.75;margin-left:5px}
+.seg{display:flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--field)}
+.seg button{flex:1 0 auto;background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:13.5px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--chip-on);color:var(--chip-on-ink)}
+.derived{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px}
+.pill{background:var(--chip);border-radius:20px;padding:2px 9px;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+
+/* score column */
+#scorecol,#summary{min-width:0;display:flex;flex-direction:column;gap:14px}
+.colhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;justify-content:space-between}
+.scen{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;min-width:0}
+.scen button{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 12px;cursor:pointer;font-size:13.5px;white-space:nowrap}
+.scen button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:700}
+.vt{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.vt button{background:none;border:0;padding:6px 12px;cursor:pointer;font-size:13.5px}
+.vt button[aria-pressed="true"]{background:var(--navy);color:#fff}
+.dom-h{margin:6px 0 -4px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:12px;align-items:start}
+.empty{background:var(--panel);border:1px dashed var(--line);border-radius:8px;padding:18px;color:var(--muted);text-align:center}
+
+.sc{background:var(--panel);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-width:0;border-top:4px solid var(--line)}
+.sc[data-cat="0"]{border-top-color:var(--c0)}.sc[data-cat="1"]{border-top-color:var(--c1)}.sc[data-cat="2"]{border-top-color:var(--c2)}.sc[data-cat="3"]{border-top-color:var(--c3)}.sc[data-cat="x"]{border-top-color:var(--cx)}
+.sc header{display:flex;align-items:flex-start;gap:8px;padding:11px 13px 0}
+.sc h3{margin:0;font-size:16px;line-height:1.2}
+.sc .dm{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.sc .tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.fav{background:none;border:0;cursor:pointer;padding:2px 4px;color:var(--muted);line-height:1}
+.fav svg{width:19px;height:19px;display:block}
+.fav[aria-pressed="true"]{color:var(--gold)}
+.fav[aria-pressed="true"] path{fill:currentColor}
+.sc .blurb{margin:3px 13px 0;font-size:12.5px;color:var(--muted)}
+.res{padding:9px 13px 0;display:flex;flex-direction:column;gap:5px}
+.big{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px}
+.big .v{font-size:30px;font-weight:700;font-family:var(--f-num);font-variant-numeric:tabular-nums;line-height:1.05}
+.big .v.txt{font-size:21px}
+.big .un{font-size:13.5px;color:var(--muted)}
+.cat{display:inline-block;font-size:12.5px;font-weight:700;border-radius:20px;padding:2px 10px}
+.cat.c0{background:var(--c0-bg);color:var(--c0)}.cat.c1{background:var(--c1-bg);color:var(--c1)}.cat.c2{background:var(--c2-bg);color:var(--c2)}.cat.c3{background:var(--c3-bg);color:var(--c3)}
+.ln{font-size:13px;margin:0}
+.ln.mut{color:var(--muted)}
+.wn{font-size:12.5px;background:var(--warn-bg);color:var(--warn);border-radius:5px;padding:5px 8px}
+.act{font-size:13px;background:var(--act-bg);border-left:3px solid var(--navy);border-radius:0 5px 5px 0;padding:6px 9px}
+:root[data-theme="dark"] .act{border-left-color:var(--gold)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .act{border-left-color:var(--gold)}}
+.needs{font-size:13.5px;color:var(--c2);font-weight:700}
+.na{font-size:13px;color:var(--muted);font-style:italic}
+.ins{padding:10px 13px 0;display:flex;flex-direction:column;gap:9px}
+.ins:empty{display:none}
+.sc details.more{margin-top:10px;border-top:1px solid var(--line)}
+.sc details.more>summary{cursor:pointer;font-size:12.5px;color:var(--muted);padding:8px 13px;list-style:none}
+.sc details.more>summary::-webkit-details-marker{display:none}
+.sc details.more>summary::before{content:"+ "}
+.sc details.more[open]>summary::before{content:"– "}
+.more .mb{padding:0 13px 12px;display:flex;flex-direction:column;gap:9px}
+.src{font-size:12px;color:var(--muted)}
+.badge{display:inline-block;font-size:11.5px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--muted)}
+.sc .pad-b{height:12px}
+
+/* summary */
+.sum{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.sum h2{margin:0;font-size:17px;color:var(--navy)}
+:root[data-theme="dark"] .sum h2{color:var(--gold)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .sum h2{color:var(--gold)}}
+.sum pre{margin:0;white-space:pre-wrap;font-family:var(--f-ui);font-size:14px;line-height:1.5;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:12px;max-width:80ch}
+.sum .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--navy);color:#fff;border:0;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:14px}
+.btn.ghost{background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+.note{font-size:12.5px;color:var(--muted)}
+.foot{font-size:12px;color:var(--muted);max-width:80ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<header class="top"><div class="in pad">
+  <div class="brand"><b>Cardiac Scores</b><span>Prof. Yasser Baghdady · risk scores from prevention to intervention</span></div>
+  <label class="search"><input id="q" type="search" placeholder="Search scores, e.g. HAS-BLED" aria-label="Search scores" autocomplete="off"></label>
+  <div class="tb">
+    <button type="button" data-units="conv" aria-pressed="true" title="mg/dL, µmol shown as mg/dL">mg/dL</button>
+    <button type="button" data-units="si" aria-pressed="false" title="mmol/L and µmol/L">SI</button>
+    <button type="button" data-act="example">Example</button>
+    <button type="button" data-act="new">New patient</button>
+  </div>
+</div></header>
+<nav class="views" aria-label="View"><div class="in pad">
+  <button type="button" data-view="patient" aria-pressed="false">Patient</button>
+  <button type="button" data-view="scores" aria-pressed="true">Scores</button>
+  <button type="button" data-view="summary" aria-pressed="false">Summary</button>
+</div></nav>
+<main class="wrap pad">
+  <aside id="profile" aria-label="Patient profile"></aside>
+  <section id="scorecol" aria-label="Scores">
+    <div class="colhead">
+      <div class="scen" id="scen" role="group" aria-label="Clinical scenario"></div>
+      <div class="vt" role="group" aria-label="View"><button type="button" data-view="scores" aria-pressed="true">Scores</button><button type="button" data-view="summary" aria-pressed="false">Summary</button></div>
+    </div>
+    <div id="cards"></div>
+    <p class="foot">Results support, and do not replace, clinical judgement. Nothing you enter leaves this device. Build 1a · 07 Nov 2026</p>
+  </section>
+  <section id="summary" aria-label="Summary"></section>
+</main>
+<script>var PREVENT_COEF={"base_10yr":{"female_total_cvd":[0.793933,0.030524,-0.160686,-0.2394,0.360078,0.86676,0.536074,0.0,0.0,0.604592,0.043377,0.315167,-0.147765,-0.066361,0.119788,-0.081972,0.030677,-0.094635,-0.27057,-0.078715,0.0,-0.163781,-3.307728],"female_ascvd":[0.719883,0.117697,-0.151185,-0.083536,0.359285,0.834858,0.483108,0.0,0.0,0.486462,0.039778,0.226531,-0.059237,-0.039576,0.084442,-0.056784,0.032569,-0.103598,-0.241754,-0.079114,0.0,-0.167149,-3.819975],"female_heart_failure":[0.899823,0.0,0.0,-0.455977,0.35765,1.038346,0.583916,-0.007229,0.299771,0.745164,0.055709,0.353444,0.0,-0.098151,0.0,0.0,0.0,-0.094666,-0.358104,-0.115945,-0.003878,-0.188429,-4.310409],"male_total_cvd":[0.768853,0.073617,-0.095443,-0.434735,0.336266,0.769286,0.438687,0.0,0.0,0.537898,0.016483,0.288879,-0.133735,-0.047592,0.150273,-0.051787,0.019117,-0.104948,-0.225195,-0.089507,0.0,-0.15437,-3.031168],"male_ascvd":[0.709985,0.165866,-0.114429,-0.283721,0.323998,0.71896,0.395697,0.0,0.0,0.369007,0.020362,0.203652,-0.086558,-0.032292,0.114563,-0.03,0.023275,-0.092702,-0.201852,-0.097053,0.0,-0.121708,-3.500655],"male_heart_failure":[0.897264,0.0,0.0,-0.681147,0.363446,0.923776,0.502374,-0.048584,0.372693,0.692692,0.025183,0.298092,0.0,-0.049773,0.0,0.0,0.0,-0.12892,-0.304092,-0.140169,0.006813,-0.179778,-3.946391]},"base_30yr":{"female_total_cvd":[0.550308,-0.092837,0.040979,-0.166331,-0.162865,0.32995,0.679389,0.319611,0.0,0.0,0.18571,0.055353,0.2894,-0.075688,-0.056367,0.107102,-0.075144,0.030179,-0.099878,-0.320617,-0.160786,0.0,-0.145079,-1.318827],"female_ascvd":[0.46692,-0.089312,0.12569,-0.154225,-0.001809,0.322949,0.629671,0.268292,0.0,0.0,0.100106,0.049966,0.187529,0.015248,-0.027612,0.073615,-0.052196,0.031692,-0.10461,-0.272779,-0.153091,0.0,-0.129915,-1.974074],"female_heart_failure":[0.625437,-0.098304,0.0,0.0,-0.391924,0.314229,0.833079,0.343865,0.059487,0.252554,0.298164,0.066716,0.333921,0.0,-0.089318,0.0,0.0,0.0,-0.09743,-0.404855,-0.198299,-0.003562,-0.156421,-2.205379],"male_total_cvd":[0.462731,-0.098428,0.083609,-0.102982,-0.214035,0.290432,0.533128,0.214191,0.0,0.0,0.115556,0.060378,0.232714,-0.027211,-0.038449,0.134192,-0.051176,0.016587,-0.110144,-0.258594,-0.156641,0.0,-0.116678,-1.148204],"male_ascvd":[0.39941,-0.093748,0.174464,-0.120203,-0.066512,0.275304,0.479026,0.178263,0.0,0.0,-0.021879,0.060255,0.142118,0.0136,-0.021826,0.101315,-0.031262,0.020673,-0.092093,-0.215995,-0.154881,0.0,-0.071255,-1.736444],"male_heart_failure":[0.568154,-0.104839,0.0,0.0,-0.476156,0.30324,0.684034,0.265627,0.083311,0.26999,0.25418,0.063892,0.258363,0.0,-0.039194,0.0,0.0,0.0,-0.126912,-0.327357,-0.204302,-0.018283,-0.134262,-1.95751]},"hba1c_10yr":{"female_total_cvd":[0.785818,0.019444,-0.152196,-0.229668,0.346578,0.536624,0.541168,0.0,0.0,0.59319,0.047246,0.315857,-0.153517,-0.068775,0.105475,-0.076112,0.030747,-0.090597,-0.224186,-0.080186,0.0,-0.166729,0.133835,0.162241,-0.01425,-3.306162],"female_ascvd":[0.711183,0.106797,-0.142574,-0.073682,0.348084,0.511295,0.488029,0.0,0.0,0.4755,0.043813,0.225909,-0.064887,-0.043764,0.069708,-0.050638,0.032747,-0.099644,-0.192434,-0.080354,0.0,-0.168259,0.133906,0.159646,0.001568,-3.838746],"female_heart_failure":[0.899739,0.0,0.0,-0.442275,0.337869,0.681284,0.5886,-0.014866,0.295837,0.73447,0.05926,0.354347,0.0,-0.100214,0.0,0.0,0.0,-0.087876,-0.303684,-0.117894,-0.008345,-0.191218,0.185644,0.183308,-0.014311,-4.288225],"male_total_cvd":[0.769918,0.060509,-0.088853,-0.417713,0.328866,0.475947,0.438566,0.0,0.0,0.533462,0.020643,0.291752,-0.138331,-0.048262,0.13938,-0.04635,0.020593,-0.103772,-0.17377,-0.091584,0.0,-0.163704,0.13159,0.129519,-0.012837,-3.040901],"male_ascvd":[0.706415,0.153227,-0.108217,-0.267529,0.317381,0.432604,0.395884,0.0,0.0,0.366501,0.025024,0.206116,-0.089999,-0.033496,0.103417,-0.025541,0.024754,-0.091744,-0.14992,-0.098089,0.0,-0.130523,0.115716,0.12883,-0.001,-3.51835],"male_heart_failure":[0.911787,0.0,0.0,-0.656807,0.352465,0.584975,0.501401,-0.051235,0.365294,0.689222,0.029238,0.30383,0.0,-0.051503,0.0,0.0,0.0,-0.126234,-0.244951,-0.139222,0.000959,-0.191711,0.165286,0.150586,-0.011344,-3.961954]},"hba1c_30yr":{"female_total_cvd":[0.534349,-0.095231,0.029812,-0.157845,-0.150449,0.317337,0.431474,0.32094,0.0,0.0,0.177144,0.058283,0.288895,-0.079589,-0.060044,0.09206,-0.069611,0.030881,-0.095405,-0.276341,-0.162394,0.0,-0.143051,0.094054,0.111649,-0.00248,-1.341059],"female_ascvd":[0.455557,-0.09035,0.114832,-0.145875,0.008932,0.313903,0.386281,0.271431,0.0,0.0,0.093099,0.053222,0.186218,0.010696,-0.032971,0.058361,-0.046327,0.032472,-0.100478,-0.226694,-0.154186,0.0,-0.128601,0.087583,0.112642,0.012436,-2.011533],"female_heart_failure":[0.621086,-0.100097,0.0,0.0,-0.37737,0.295316,0.568169,0.344914,0.054009,0.249767,0.287578,0.069201,0.333494,0.0,-0.092234,0.0,0.0,0.0,-0.090788,-0.355465,-0.200885,-0.007961,-0.156803,0.144834,0.127784,-0.002259,-2.193553],"male_total_cvd":[0.451987,-0.101624,0.070046,-0.0968,-0.192353,0.282704,0.341715,0.210527,0.0,0.0,0.111329,0.064014,0.233425,-0.029942,-0.03932,0.122885,-0.046374,0.01846,-0.108574,-0.220805,-0.157798,0.0,-0.117938,0.076817,0.07773,0.00922,-1.180767],"male_ascvd":[0.388327,-0.095811,0.161337,-0.114442,-0.047434,0.269128,0.285977,0.175955,0.0,0.0,-0.02429,0.064452,0.142874,0.011506,-0.02333,0.089966,-0.027548,0.022573,-0.090802,-0.177189,-0.154885,0.0,-0.073275,0.059109,0.082116,0.017975,-1.777708],"male_heart_failure":[0.570373,-0.108454,0.0,0.0,-0.447177,0.291015,0.450724,0.259585,0.085068,0.263722,0.245471,0.067565,0.261199,0.0,-0.040891,0.0,0.0,0.0,-0.124105,-0.284946,-0.203231,-0.023971,-0.138301,0.110118,0.09492,0.008419,-1.974999]},"uacr_10yr":{"female_total_cvd":[0.796925,0.025663,-0.158811,-0.22557,0.339665,0.804751,0.528534,0.0,0.0,0.480351,0.043447,0.298521,-0.149779,-0.074289,0.106756,-0.077813,0.030677,-0.090717,-0.270512,-0.083056,0.0,-0.138925,0.179304,0.013207,-3.738341],"female_ascvd":[0.7202,0.113577,-0.149351,-0.072668,0.343626,0.777309,0.474666,0.0,0.0,0.382465,0.039418,0.212518,-0.060305,-0.046605,0.073312,-0.053426,0.032569,-0.099989,-0.241176,-0.082694,0.0,-0.144474,0.150122,0.005026,-4.174614],"female_heart_failure":[0.914597,0.0,0.0,-0.444135,0.326032,0.961136,0.575579,0.000883,0.298896,0.591529,0.055682,0.33141,0.0,-0.10786,0.0,0.0,0.0,-0.087523,-0.356859,-0.122025,-0.005364,-0.161039,0.219728,0.032667,-4.841506],"male_total_cvd":[0.776865,0.065995,-0.095111,-0.420667,0.312015,0.698521,0.431467,0.0,0.0,0.384136,0.009384,0.267649,-0.139097,-0.057931,0.138372,-0.048833,0.020041,-0.102454,-0.223635,-0.089485,0.0,-0.132185,0.188797,0.091698,-3.510705],"male_ascvd":[0.714172,0.160219,-0.113909,-0.271946,0.305872,0.660063,0.388402,0.0,0.0,0.246632,0.015185,0.186167,-0.08944,-0.041188,0.105821,-0.028089,0.024043,-0.091232,-0.200489,-0.096936,0.0,-0.102287,0.151007,0.0556,-3.85146],"male_heart_failure":[0.91118,0.0,0.0,-0.669365,0.329008,0.837766,0.497892,-0.042749,0.362416,0.50758,0.013772,0.273996,0.0,-0.064571,0.0,0.0,0.0,-0.123004,-0.30133,-0.141032,0.002153,-0.154802,0.23063,0.147219,-4.556907]},"uacr_30yr":{"female_total_cvd":[0.549177,-0.093731,0.035985,-0.164297,-0.14834,0.313353,0.625377,0.314717,0.0,0.0,0.109466,0.055071,0.278243,-0.078624,-0.062895,0.093204,-0.071069,0.030636,-0.095145,-0.316823,-0.163639,0.0,-0.126548,0.114225,-0.005586,-1.583738],"female_ascvd":[0.462967,-0.090278,0.121521,-0.152207,0.009268,0.311361,0.581256,0.263167,0.0,0.0,0.039173,0.049296,0.178618,0.013106,-0.032514,0.061709,-0.048919,0.032108,-0.100319,-0.268457,-0.15473,0.0,-0.11307,0.090347,-0.014582,-2.178888],"female_heart_failure":[0.631951,-0.100928,0.0,0.0,-0.378717,0.286339,0.763122,0.335584,0.067708,0.251724,0.194007,0.066401,0.317144,0.0,-0.097066,0.0,0.0,0.0,-0.089624,-0.400743,-0.204204,-0.00547,-0.13602,0.148603,0.011608,-2.538952],"male_total_cvd":[0.464491,-0.09989,0.075761,-0.103178,-0.199071,0.271582,0.475464,0.206967,0.0,0.0,0.03311,0.054047,0.218991,-0.033104,-0.04534,0.121454,-0.048399,0.0179,-0.105932,-0.249286,-0.156154,0.0,-0.101243,0.100757,0.057246,-1.398727],"male_ascvd":[0.399561,-0.094557,0.168669,-0.120215,-0.055556,0.263357,0.436204,0.171623,0.0,0.0,-0.077528,0.056124,0.131933,0.010243,-0.026929,0.092056,-0.029702,0.021794,-0.089335,-0.208147,-0.154272,0.0,-0.059725,0.068487,0.019396,-1.873449],"male_heart_failure":[0.575024,-0.106227,0.0,0.0,-0.463399,0.274287,0.612208,0.261499,0.089546,0.263242,0.143047,0.053518,0.241747,0.0,-0.049857,0.0,0.0,0.0,-0.119383,-0.316651,-0.204612,-0.021688,-0.116564,0.136645,0.107836,-2.314872]},"full_10yr":{"female_total_cvd":[0.771679,0.006211,-0.154776,-0.193312,0.307122,0.496753,0.466605,0.0,0.0,0.47807,0.052908,0.303489,-0.155652,-0.066703,0.106182,-0.074227,0.028824,-0.087519,-0.22671,-0.067613,0.0,-0.149323,0.136199,0.22616,0.180451,0.164592,0.019841,0.129851,0.141256,-0.003166,-3.860385],"female_ascvd":[0.702307,0.089876,-0.140732,-0.025665,0.314511,0.479922,0.406205,0.0,0.0,0.384774,0.049517,0.213386,-0.067855,-0.045142,0.078819,-0.053599,0.029176,-0.096184,-0.200147,-0.058647,0.0,-0.153779,0.141397,0.228136,0.158891,0.137182,0.006161,0.123192,0.141057,0.005866,-4.291503],"female_heart_failure":[0.884209,0.0,0.0,-0.421474,0.300292,0.617036,0.538027,-0.019134,0.27643,0.597585,0.06542,0.331361,0.0,-0.10023,0.0,0.0,0.0,-0.084536,-0.298906,-0.111135,0.00081,-0.166663,0.121303,0.231415,0.181914,0.194814,0.039537,0.176668,0.161491,-0.001058,-4.896524],"male_total_cvd":[0.784758,0.053449,-0.091128,-0.492197,0.297241,0.452705,0.372664,0.0,0.0,0.388685,0.008166,0.250805,-0.153848,-0.047469,0.141538,-0.043645,0.019955,-0.102269,-0.176251,-0.071587,0.0,-0.142867,0.080243,0.275073,0.144759,0.177285,0.109567,0.11657,0.10483,-0.023007,-3.631387],"male_ascvd":[0.712874,0.14652,-0.112579,-0.338722,0.298025,0.399583,0.337911,0.0,0.0,0.25826,0.014777,0.168662,-0.107362,-0.038104,0.103417,-0.022876,0.026745,-0.089745,-0.149746,-0.077206,0.0,-0.119837,0.065112,0.267668,0.138849,0.137584,0.065294,0.101282,0.109273,-0.011285,-3.969788],"male_heart_failure":[0.90957,0.0,0.0,-0.676518,0.311165,0.553505,0.432681,-0.085429,0.355174,0.510224,0.015472,0.257096,0.0,-0.059118,0.0,0.0,0.0,-0.121906,-0.243758,-0.105363,0.003791,-0.166021,0.110637,0.33712,0.169463,0.216461,0.170281,0.148297,0.123409,-0.023464,-4.663513]},"full_30yr":{"female_total_cvd":[0.507375,-0.098175,0.01623,-0.161715,-0.111124,0.282946,0.400407,0.29187,0.0,0.0,0.10171,0.062264,0.287242,-0.076814,-0.055728,0.091759,-0.067913,0.029076,-0.090775,-0.270212,-0.137322,0.0,-0.125586,0.106774,0.185314,0.156712,0.102806,-0.000618,0.092528,0.09756,0.010171,-1.748475],"female_ascvd":[0.438674,-0.092196,0.097773,-0.145352,0.059092,0.286286,0.366914,0.235469,0.0,0.0,0.035434,0.057309,0.184008,0.01175,-0.033195,0.066431,-0.049283,0.028889,-0.096471,-0.227965,-0.120405,0.0,-0.115764,0.110763,0.184037,0.130896,0.081074,-0.014778,0.079471,0.100262,0.017301,-2.314066],"female_heart_failure":[0.592751,-0.102875,0.0,0.0,-0.359378,0.262856,0.511347,0.347344,0.056466,0.236386,0.19713,0.073523,0.321939,0.0,-0.088032,0.0,0.0,0.0,-0.086313,-0.342536,-0.181405,0.003129,-0.135699,0.084763,0.18397,0.14858,0.127331,0.016701,0.137834,0.113883,0.013898,-2.642208],"male_total_cvd":[0.442759,-0.106411,0.062938,-0.101543,-0.254233,0.254968,0.333835,0.187383,0.0,0.0,0.02461,0.055201,0.197973,-0.040771,-0.036552,0.123282,-0.044133,0.017787,-0.104666,-0.211611,-0.127791,0.0,-0.095592,0.02567,0.188764,0.089241,0.08946,0.071012,0.06762,0.063409,0.003878,-1.504558],"male_ascvd":[0.374357,-0.09955,0.154481,-0.12153,-0.108397,0.255518,0.2697,0.162843,0.0,0.0,-0.077507,0.058341,0.112032,-0.002506,-0.025612,0.088675,-0.025451,0.024464,-0.086915,-0.165745,-0.124471,0.0,-0.062455,0.015675,0.186423,0.08457,0.056017,0.025224,0.050142,0.07229,0.011494,-1.985368],"male_heart_failure":[0.547883,-0.111193,0.0,0.0,-0.454735,0.25276,0.438538,0.239795,0.064093,0.264308,0.135459,0.057069,0.220666,0.0,-0.043677,0.0,0.0,0.0,-0.116838,-0.273006,-0.157369,-0.0175,-0.112868,0.057746,0.244644,0.107678,0.123349,0.12748,0.098506,0.080484,0.002281,-2.425439]}};
+/* ===== Risk score engine (no DOM) ===== */
+var RS = (function () {
+  function ln(x) { return Math.log(x); }
+  function chol(mg) { return mg / 38.67; }          // mg/dL -> mmol/L (ESC convention)
+
+  /* ---------- helpers ---------- */
+  function egfrCKDEPI2021(cr, age, sex) {
+    if (!(cr > 0) || !(age > 0)) return null;
+    var f = sex === 'female', k = f ? 0.7 : 0.9, a = f ? -0.241 : -0.302;
+    var r = cr / k;
+    return 142 * Math.pow(Math.min(r, 1), a) * Math.pow(Math.max(r, 1), -1.2) *
+      Math.pow(0.9938, age) * (f ? 1.012 : 1);
+  }
+  function bmi(w, hcm) { return (w > 0 && hcm > 0) ? w / Math.pow(hcm / 100, 2) : null; }
+  function hba1cToMmol(pct) { return (pct - 2.15) * 10.929; }
+  function gStage(e) {
+    if (e == null) return '';
+    return e >= 90 ? 'G1' : e >= 60 ? 'G2' : e >= 45 ? 'G3a' : e >= 30 ? 'G3b' : e >= 15 ? 'G4' : 'G5';
+  }
+
+  /* ---------- SCORE2 family (ESC 2021 / 2023), Very-High-Risk region ---------- */
+  var VH = { male: [0.5836, 0.8294], female: [0.9412, 0.8329] };      // SCORE2 & SCORE2-Diabetes
+  var VH_OP = { male: [0.05, 0.70], female: [0.38, 0.69] };           // SCORE2-OP
+  function recal(p, s) { return 1 - Math.exp(-Math.exp(s[0] + s[1] * Math.log(-Math.log(1 - p)))); }
+
+  function score2(p) {   // p: age, sex, smoker, sbp, tc, hdl (mg/dL)
+    var a = (p.age - 60) / 5, s = p.smoker ? 1 : 0, b = (p.sbp - 120) / 20,
+      t = chol(p.tc) - 6, h = (chol(p.hdl) - 1.3) / 0.5, x, s0;
+    if (p.sex === 'male') {
+      x = 0.3742 * a + 0.6012 * s + 0.2777 * b + 0.1458 * t - 0.2698 * h
+        - 0.0755 * a * s - 0.0255 * a * b - 0.0281 * a * t + 0.0426 * a * h; s0 = 0.9605;
+    } else {
+      x = 0.4648 * a + 0.7744 * s + 0.3131 * b + 0.1002 * t - 0.2606 * h
+        - 0.1088 * a * s - 0.0277 * a * b - 0.0226 * a * t + 0.0613 * a * h; s0 = 0.9776;
+    }
+    return recal(1 - Math.pow(s0, Math.exp(x)), VH[p.sex]) * 100;
+  }
+
+  function score2OP(p) { // age >= 70; diabetes is a model variable
+    var a = p.age - 73, d = p.dm ? 1 : 0, s = p.smoker ? 1 : 0, b = p.sbp - 150,
+      t = chol(p.tc) - 6, h = chol(p.hdl) - 1.4, x, u;
+    if (p.sex === 'male') {
+      x = 0.0634 * a + 0.4245 * d + 0.3524 * s + 0.0094 * b + 0.0850 * t - 0.3564 * h
+        - 0.0174 * a * d - 0.0247 * a * s - 0.0005 * a * b + 0.0073 * a * t + 0.0091 * a * h;
+      u = 1 - Math.pow(0.7576, Math.exp(x - 0.0929));
+    } else {
+      x = 0.0789 * a + 0.6010 * d + 0.4921 * s + 0.0102 * b + 0.0605 * t - 0.3040 * h
+        - 0.0107 * a * d - 0.0255 * a * s - 0.0004 * a * b - 0.0009 * a * t + 0.0154 * a * h;
+      u = 1 - Math.pow(0.8082, Math.exp(x - 0.229));
+    }
+    return recal(u, VH_OP[p.sex]) * 100;
+  }
+
+  function score2DM(p) { // needs dmAge, hba1c (%), egfr
+    var a = (p.age - 60) / 5, s = p.smoker ? 1 : 0, b = (p.sbp - 120) / 20,
+      t = chol(p.tc) - 6, h = (chol(p.hdl) - 1.3) / 0.5, da = (p.dmAge - 50) / 5,
+      hb = (hba1cToMmol(p.hba1c) - 31) / 9.34, e = (ln(p.egfr) - 4.5) / 0.15, x, s0;
+    if (p.sex === 'male') {
+      x = 0.5368 * a + 0.4774 * s + 0.1322 * b + 0.6457 + 0.1102 * t - 0.1087 * h
+        - 0.0672 * a * s - 0.0268 * a * b - 0.0983 * a - 0.0181 * a * t + 0.0095 * a * h
+        - 0.0998 * da + 0.0955 * hb - 0.0591 * e + 0.0058 * e * e - 0.0134 * hb * a + 0.0115 * e * a;
+      s0 = 0.9605;
+    } else {
+      x = 0.6624 * a + 0.6139 * s + 0.1421 * b + 0.8096 + 0.1127 * t - 0.1568 * h
+        - 0.1122 * a * s - 0.0167 * a * b - 0.1272 * a - 0.0200 * a * t + 0.0186 * a * h
+        - 0.1180 * da + 0.1173 * hb - 0.0640 * e + 0.0062 * e * e - 0.0196 * hb * a + 0.0169 * e * a;
+      s0 = 0.9776;
+    }
+    return recal(1 - Math.pow(s0, Math.exp(x)), VH[p.sex]) * 100;
+  }
+
+  // Selects the ESC model automatically and applies the clinic modifiers.
+  function score2Auto(p) {
+    var r = { model: null, raw: null, value: null, mods: [], note: '', missing: [] };
+    if (p.ascvd) { r.model = 'ASCVD'; r.note = 'Established ASCVD: SCORE2 does not apply (secondary prevention, very high risk by definition).'; return r; }
+    if (p.age >= 70) { r.model = 'SCORE2-OP'; r.raw = score2OP(p);
+      if (p.age > 89) r.note = 'SCORE2-OP is validated to age 89.'; }
+    else if (p.dm) {
+      r.model = 'SCORE2-Diabetes';
+      if (p.age < 40) { r.note = 'SCORE2-Diabetes is validated from age 40.'; }
+      if (!(p.dmAge > 0)) r.missing.push('Age at diabetes diagnosis');
+      if (!(p.hba1c > 0)) r.missing.push('HbA1c');
+      if (!(p.egfr > 0)) r.missing.push('Creatinine (for eGFR)');
+      if (r.missing.length || p.age < 40) return r;
+      r.raw = score2DM(p);
+    } else if (p.age >= 40) { r.model = 'SCORE2'; r.raw = score2(p); }
+    else { r.model = 'SCORE2'; r.note = 'SCORE2 is validated from age 40. Use PREVENT 30-year risk for younger patients.'; return r; }
+
+    var v = r.raw;
+    // eGFR modifier (not for SCORE2-Diabetes: eGFR is already inside that model)
+    if (r.model !== 'SCORE2-Diabetes' && p.egfr > 0 && p.egfr < 60) {
+      var m = p.egfr >= 45 ? 1.18 : p.egfr >= 30 ? 1.40 : 1.65;
+      v *= m; r.mods.push({ en: 'eGFR ' + Math.round(p.egfr) + ' → ×' + m.toFixed(2), ar: 'معدل الترشيح ' + Math.round(p.egfr) + ' ← ×' + m.toFixed(2) });
+    }
+    if (p.famhx) { v *= 1.15; r.mods.push({ en: 'Family history → ×1.15', ar: 'تاريخ عائلي ← ×١٫١٥' }); }
+    r.value = Math.min(v, 99);
+    return r;
+  }
+  function riskCat(v) { // clinic table (primary prevention)
+    if (v == null) return null;
+    return v < 5 ? 0 : v < 10 ? 1 : v < 20 ? 2 : 3;
+  }
+  function escAgeCat(v, age) { // ESC 2021 age-specific SCORE2/OP categories
+    var c = age < 50 ? [2.5, 7.5] : age < 70 ? [5, 10] : [7.5, 15];
+    return v < c[0] ? 'low-to-moderate' : v < c[1] ? 'high' : 'very high';
+  }
+
+  /* ---------- SMART2 (Hageman 2022, Eur Heart J; Supplementary Table 2) ----------
+     10-yr fatal + non-fatal MI/stroke/vascular death in established ASCVD.
+     Units: SBP per 10 mmHg, non-HDL mmol/L, hsCRP mg/L (consistent with the published
+     subdistribution HRs and the mean linear predictor of -0.0463729). */
+  var SMART2_EO = { veryhigh: 0.2285371, high: 0.5085825, moderate: 0.6973285, low: 0.81590 };
+  function smart2(p) {
+    var nh = chol(p.tc - p.hdl), crp = p.hscrp > 0 ? p.hscrp : 2.0, y = p.years || 0;
+    var lp = -0.03496022 * p.age + 0.000551072 * p.age * p.age + (p.sex === 'male' ? 0.287658743 : 0) +
+      (p.smoker ? 0.345583271 : 0) + (p.dm ? 0.318170659 : 0) + 0.018913154 * (p.sbp / 10) +
+      0.540364249 * ln(nh) + 0.151760173 * ln(crp) - 0.03967521 * p.egfr + 0.000218613 * p.egfr * p.egfr +
+      0.047699585 * y - 0.00164973 * y * y + (p.cad ? 0.294701954 : 0) + (p.cevd ? 0.34831786 : 0) +
+      (p.pad ? 0.22446658 : 0) + (p.aaa ? 0.330356631 : 0) + (p.antithromb ? -0.21072103 : 0);
+    var eo = SMART2_EO[p.region || 'veryhigh'];
+    return { value: 100 * (1 - Math.pow(1 - 0.165822797, Math.exp(lp + 0.0463729 - Math.log(eo)))), crpImputed: !(p.hscrp > 0), lp: lp };
+  }
+
+  /* ---------- PREVENT (AHA 2023, incl. 2025 HbA1c erratum) ---------- */
+  function prevent(p) {
+    var r = { ok: false, warn: [], model: 'base' };
+    if (p.age < 30 || p.age > 79) { r.warn.push('PREVENT applies to ages 30–79.'); return r; }
+    var need = [];
+    if (!(p.egfr > 0)) need.push('Creatinine (for eGFR)');
+    if (!(p.bmi > 0)) need.push('Weight and height (for BMI)');
+    if (need.length) { r.missing = need; return r; }
+    var lim = [['tc', 130, 320, 'Total cholesterol'], ['hdl', 20, 100, 'HDL'], ['sbp', 90, 180, 'SBP'], ['bmi', 18.5, 39.9, 'BMI'], ['egfr', 15, 140, 'eGFR']];
+    lim.forEach(function (l) { if (p[l[0]] < l[1] || p[l[0]] > l[2]) r.warn.push(l[3] + ' is outside the PREVENT range (' + l[1] + '–' + l[2] + '); estimate is extrapolated.'); });
+
+    var age = (p.age - 55) / 10, nh = (p.tc - p.hdl) * 0.02586 - 3.5, hd = (p.hdl * 0.02586 - 1.3) / 0.3,
+      sl = (Math.min(p.sbp, 110) - 110) / 20, sg = (Math.max(p.sbp, 110) - 130) / 20,
+      dm = p.dm ? 1 : 0, sm = p.smoker ? 1 : 0,
+      bl = (Math.min(p.bmi, 30) - 25) / 5, bg = (Math.max(p.bmi, 30) - 30) / 5,
+      el = (Math.min(p.egfr, 60) - 60) / -15, eg = (Math.max(p.egfr, 60) - 90) / -15,
+      bt = p.bptx ? 1 : 0, st = p.statin ? 1 : 0;
+    var base = [age, null, nh, hd, sl, sg, dm, sm, bl, bg, el, eg, bt, st, bt * sg, st * nh,
+      age * nh, age * hd, age * sg, age * dm, age * sm, age * bg, age * el];
+    var hasA = p.hba1c > 0, hasU = p.uacr > 0;
+    var lu = hasU ? ln(p.uacr) : 0, mu = hasU ? 0 : 1;
+    var hn = (hasA && !dm) ? p.hba1c - 5.3 : 0, hdm = (hasA && dm) ? p.hba1c - 5.3 : 0, mh = hasA ? 0 : 1;
+    var extra, model;
+    if (hasA && hasU) { model = 'full'; extra = [0, 0, 1, lu, mu, hn, hdm, mh]; }   // SDI unavailable outside US → missing
+    else if (hasU) { model = 'uacr'; extra = [lu, mu]; }
+    else if (hasA) { model = 'hba1c'; extra = [hn, hdm, mh]; }
+    else { model = 'base'; extra = []; }
+    r.model = model;
+    function run(t) {
+      var v = base.slice(); v[1] = age * age;
+      if (t === '10yr') v.splice(1, 1);
+      v = v.concat(extra, [1]);
+      var out = {};
+      ['total_cvd', 'ascvd', 'heart_failure'].forEach(function (o) {
+        var b = PREVENT_COEF[model + '_' + t][p.sex + '_' + o], lo = 0;
+        for (var i = 0; i < b.length; i++) lo += b[i] * v[i];
+        out[o] = 100 * Math.exp(lo) / (1 + Math.exp(lo));
+      });
+      return out;
+    }
+    r.y10 = run('10yr');
+    if (p.age <= 59) r.y30 = run('30yr'); else r.warn.push('30-year risk is estimated only for ages 30–59.');
+    r.ok = true;
+    return r;
+  }
+  function preventCat(v) { return v < 5 ? 0 : v < 7.5 ? 1 : v < 20 ? 2 : 3; } // low/borderline/intermediate/high
+
+  /* ---------- Framingham general CVD (D'Agostino 2008) ---------- */
+  function framingham(p) {
+    var m = p.sex === 'male', x;
+    if (m) x = 3.06117 * ln(p.age) + 1.12370 * ln(p.tc) - 0.93263 * ln(p.hdl) +
+      (p.bptx ? 1.99881 : 1.93303) * ln(p.sbp) + (p.smoker ? 0.65451 : 0) + (p.dm ? 0.57367 : 0);
+    else x = 2.32888 * ln(p.age) + 1.20904 * ln(p.tc) - 0.70833 * ln(p.hdl) +
+      (p.bptx ? 2.82263 : 2.76157) * ln(p.sbp) + (p.smoker ? 0.52873 : 0) + (p.dm ? 0.69154 : 0);
+    return 100 * (1 - Math.pow(m ? 0.88936 : 0.95012, Math.exp(x - (m ? 23.9802 : 26.1931))));
+  }
+
+  /* ---------- AF: CHA2DS2-VA (ESC 2024) and CHA2DS2-VASc ---------- */
+  function chads(p) {
+    var age = p.age >= 75 ? 2 : p.age >= 65 ? 1 : 0;
+    var va = (p.chf ? 1 : 0) + (p.htn ? 1 : 0) + age + (p.dm ? 1 : 0) + (p.stroke ? 2 : 0) + (p.vasc ? 1 : 0);
+    return { va: va, vasc: va + (p.sex === 'female' ? 1 : 0) };
+  }
+  // Annual stroke/TIA/systemic embolism without anticoagulation, Friberg 2012 (Swedish AF cohort), by CHA2DS2-VASc
+  var VASC_RATE = [0.2, 0.6, 2.2, 3.2, 4.8, 7.2, 9.7, 11.2, 10.8, 12.2];
+
+  function hasbled(p) {
+    var items = [p.hUncontrolled, p.renal, p.liver, p.stroke, p.bleed, p.labile, p.age > 65, p.drugs, p.alcohol];
+    return items.reduce(function (s, x) { return s + (x ? 1 : 0); }, 0);
+  }
+  // Major bleeds per 100 patient-years, Pisters 2010 (Euro Heart Survey)
+  var HASBLED_RATE = [1.13, 1.02, 1.88, 3.74, 8.70, 12.50];
+
+  /* ---------- ACS ---------- */
+  // GRACE in-hospital death, Granger 2003 (Arch Intern Med) Figure 4
+  function band(v, lim, pts) { var i = 0; while (i < lim.length && v >= lim[i]) i++; return pts[i]; }
+  function grace(p) {
+    var parts = {
+      age: p.age <= 30 ? 0 : band(p.age, [30, 40, 50, 60, 70, 80, 90], [0, 8, 25, 41, 58, 75, 91, 100]),
+      hr: p.hr <= 50 ? 0 : band(p.hr, [50, 70, 90, 110, 150, 200], [0, 3, 9, 15, 24, 38, 46]),
+      sbp: p.sbp <= 80 ? 58 : band(p.sbp, [80, 100, 120, 140, 160, 200], [58, 53, 43, 34, 24, 10, 0]),
+      cr: (p.cr > 2 && p.cr <= 4) ? 21 : band(p.cr, [0.4, 0.8, 1.2, 1.6, 2.0, 4.0], [1, 4, 7, 10, 13, 21, 28]),
+      killip: [0, 0, 20, 39, 59][p.killip || 1],
+      arrest: p.arrest ? 39 : 0, st: p.stdev ? 28 : 0, enz: p.enz ? 14 : 0
+    };
+    var tot = 0; for (var k in parts) tot += parts[k];
+    var prob = 100 / (1 + Math.exp(-(-8.0922 + 0.03271 * tot)));
+    return { parts: parts, total: tot, prob: prob, cat: tot <= 108 ? 0 : tot <= 140 ? 1 : 2 };
+  }
+  // TIMI UA/NSTEMI (Antman 2000): 14-day death, new/recurrent MI or urgent revascularisation
+  var TIMI_UA_RATE = [4.7, 4.7, 8.3, 13.2, 19.9, 26.2, 40.9, 40.9];
+  function timiUA(p) {
+    var rf = [p.fhx, p.htn, p.lipid, p.dm, p.smoker].filter(Boolean).length;
+    var s = (p.age >= 65 ? 1 : 0) + (rf >= 3 ? 1 : 0) + (p.knownCAD ? 1 : 0) + (p.asa ? 1 : 0) +
+      (p.angina2 ? 1 : 0) + (p.stdev ? 1 : 0) + (p.enz ? 1 : 0);
+    return { score: s, rf: rf, rate: TIMI_UA_RATE[s] };
+  }
+  // TIMI STEMI (Morrow 2000): 30-day mortality
+  var TIMI_STEMI_RATE = [0.8, 1.6, 2.2, 4.4, 7.3, 12.4, 16.1, 23.4, 26.8];
+  function timiSTEMI(p) {
+    var s = (p.age >= 75 ? 3 : p.age >= 65 ? 2 : 0) + ((p.dm || p.htn || p.anginaHx) ? 1 : 0) +
+      (p.sbp < 100 ? 3 : 0) + (p.hr > 100 ? 2 : 0) + ((p.killip || 1) >= 2 ? 2 : 0) +
+      (p.weight > 0 && p.weight < 67 ? 1 : 0) + (p.antLBBB ? 1 : 0) + (p.late ? 1 : 0);
+    return { score: s, rate: s > 8 ? 35.9 : TIMI_STEMI_RATE[s] };
+  }
+
+  /* ---------- Pre-op: RCRI (Lee 1999) ---------- */
+  function rcri(p) {
+    var s = [p.highRiskSurg, p.ihd, p.chf, p.cvd, p.insulin, p.cr > 2].filter(Boolean).length;
+    return { score: s, lee: [0.4, 0.9, 6.6, 11][Math.min(s, 3)], ccs: [3.9, 6.0, 10.1, 15.0][Math.min(s, 3)] };
+  }
+
+  return {
+    egfr: egfrCKDEPI2021, bmi: bmi, gStage: gStage, chol: chol,
+    smart2: smart2, score2: score2, score2OP: score2OP, score2DM: score2DM, score2Auto: score2Auto, riskCat: riskCat, escAgeCat: escAgeCat,
+    prevent: prevent, preventCat: preventCat, framingham: framingham,
+    chads: chads, VASC_RATE: VASC_RATE, hasbled: hasbled, HASBLED_RATE: HASBLED_RATE,
+    grace: grace, timiUA: timiUA, timiSTEMI: timiSTEMI, rcri: rcri
+  };
+})();
+
+/* ===== Utilities and new scores (Phase 1a) — pure functions, no DOM ===== */
+var UT = (function () {
+  function crcl(cr, age, sex, wt) {           // Cockcroft-Gault, actual body weight, mL/min
+    if (!(cr > 0) || !(age > 0) || !(wt > 0)) return null;
+    return (140 - age) * wt * (sex === 'female' ? 0.85 : 1) / (72 * cr);
+  }
+  function bsa(wt, hcm) {                     // Mosteller, m²
+    return (wt > 0 && hcm > 0) ? Math.sqrt(wt * hcm / 3600) : null;
+  }
+  function friedewald(tc, hdl, tg) {          // mg/dL; invalid when TG ≥ 400
+    if (!(tc > 0 && hdl > 0 && tg > 0) || tg >= 400) return null;
+    return tc - hdl - tg / 5;
+  }
+  function sampson(tc, hdl, tg) {             // NIH equation, mg/dL; valid to TG 800
+    if (!(tc > 0 && hdl > 0 && tg > 0) || tg > 800) return null;
+    var nh = tc - hdl;
+    return tc / 0.948 - hdl / 0.971 - (tg / 8.56 + tg * nh / 2140 - tg * tg / 16100) - 9.44;
+  }
+  function map(sbp, dbp) { return (sbp > 0 && dbp > 0) ? dbp + (sbp - dbp) / 3 : null; }
+
+  /* DOAC dose for non-valvular AF: apixaban and rivaroxaban only (the two available in Egypt).
+     Follows the EU SmPC where EU and US labels differ. Returns a structured result. */
+  function doac(p) {
+    var r = { drug: p.drug, dose: null, cat: 0, reasons: [], warn: [], missing: [] };
+    if (!(p.age > 0)) r.missing.push('age');
+    if (!(p.wt > 0)) r.missing.push('wt');
+    if (!(p.cr > 0)) r.missing.push('cr');
+    if (!p.sex) r.missing.push('sex');
+    if (r.missing.length) return r;
+    var cl = crcl(p.cr, p.age, p.sex, p.wt);
+    r.crcl = cl;
+    if (p.inhibitor) r.warn.push('Strong CYP3A4 and P-gp inhibitor (e.g. ketoconazole, itraconazole, ritonavir): avoid.');
+    if (p.inducer) r.warn.push('Strong inducer (rifampicin, carbamazepine, phenytoin, phenobarbital, St John’s wort): avoid, levels fall.');
+    if (p.bleedDrugs) r.warn.push('Antiplatelet or NSAID co-prescribed: review the indication, bleeding risk rises.');
+    if (p.liver === 'C') { r.dose = 'Not recommended'; r.cat = 3; r.reasons.push('Child-Pugh C liver disease.'); return r; }
+    if (cl < 15) { r.dose = 'Not recommended'; r.cat = 3; r.reasons.push('CrCl below 15 mL/min.'); return r; }
+    if (p.indication === 'vte') return doacVTE(p, r, cl);
+    if (p.drug === 'apixaban') {
+      var c = [];
+      if (p.age >= 80) c.push('age ≥ 80');
+      if (p.wt <= 60) c.push('weight ≤ 60 kg');
+      if (p.cr >= 1.5) c.push('creatinine ≥ 1.5 mg/dL');
+      if (cl < 30) { r.dose = '2.5 mg twice daily'; r.cat = 2; r.reasons.push('CrCl 15–29 mL/min (EU label).'); }
+      else if (c.length >= 2) { r.dose = '2.5 mg twice daily'; r.cat = 2; r.reasons.push('2 or more of: ' + c.join(', ') + '.'); }
+      else {
+        r.dose = '5 mg twice daily'; r.cat = 0;
+        r.reasons.push(c.length ? 'Only 1 reduction criterion (' + c[0] + '); full dose.' : 'No dose-reduction criteria.');
+        if (c.length === 1) r.warn.push('One criterion alone does not justify 2.5 mg; under-dosing raises stroke risk.');
+      }
+      if (p.liver === 'B') r.warn.push('Child-Pugh B: use with caution.');
+    } else {
+      if (p.liver === 'B') { r.dose = 'Not recommended'; r.cat = 3; r.reasons.push('Child-Pugh B liver disease (rivaroxaban).'); return r; }
+      if (cl < 50) { r.dose = '15 mg once daily with food'; r.cat = 2; r.reasons.push('CrCl 15–49 mL/min.'); }
+      else { r.dose = '20 mg once daily with food'; r.cat = 0; r.reasons.push('CrCl ≥ 50 mL/min.'); }
+      if (cl >= 15 && cl < 30) r.warn.push('CrCl 15–29: use with caution.');
+    }
+    return r;
+  }
+
+  /* VTE (DVT/PE) treatment, EU SmPC. Age and weight do not change VTE doses; only the
+     rivaroxaban maintenance phase has a renal option. */
+  function doacVTE(p, r, cl) {
+    if (p.drug === 'apixaban') {
+      if (p.liver === 'B') r.warn.push('Child-Pugh B: use with caution.');
+      r.dose = '10 mg twice daily for 7 days, then 5 mg twice daily'; r.cat = 0;
+      r.reasons.push('Standard VTE regimen; no dose reduction for age, weight or creatinine.');
+      r.reasons.push('Extended prevention after ≥ 6 months: 2.5 mg twice daily.');
+      if (cl < 30) { r.cat = 1; r.warn.push('CrCl 15–29: use with caution (limited data).'); }
+    } else {
+      if (p.liver === 'B') { r.dose = 'Not recommended'; r.cat = 3; r.reasons.push('Child-Pugh B liver disease (rivaroxaban).'); return r; }
+      r.dose = '15 mg twice daily for 21 days, then 20 mg once daily, with food'; r.cat = 0;
+      r.reasons.push('Standard VTE regimen; the first 21 days are not reduced for kidney function.');
+      if (cl < 50) { r.cat = 1; r.reasons.push('CrCl 15–49: after day 21, 15 mg once daily if bleeding risk outweighs recurrence risk.'); }
+      if (cl < 30) r.warn.push('CrCl 15–29: use with caution.');
+      r.reasons.push('Extended prevention after ≥ 6 months: 10 mg once daily (20 mg if recurrence risk is high).');
+    }
+    return r;
+  }
+
+  /* SMART2 as U-Prevent computes it: the published model plus U-Prevent's antithrombotic effects,
+     expressed relative to single antiplatelet therapy (measured against U-Prevent, 7 Nov 2026). */
+  var SM_AT = { none: 0.42144206, aspirin: 0, dapt: -0.4615, aspdoac: -0.6955 };
+  var SM_EO = { veryhigh: 0.2285371, high: 0.5085825, moderate: 0.6973285, low: 0.81590 };
+  function smart2(p) {
+    var q = {}; for (var k in p) q[k] = p[k]; q.antithromb = true;
+    var b = RS.smart2(q), lp = b.lp + (SM_AT[p.at || 'aspirin'] || 0);
+    var eo = SM_EO[p.region || 'veryhigh'];
+    return { value: 100 * (1 - Math.pow(1 - 0.165822797, Math.exp(lp + 0.0463729 - Math.log(eo)))), crpImputed: b.crpImputed, lp: lp };
+  }
+
+  return { crcl: crcl, bsa: bsa, friedewald: friedewald, sampson: sampson, map: map, doac: doac, smart2: smart2 };
+})();
+
+
+/* ===== Field registry, derived values and score definitions =====
+   Every score is data: which inputs it reads, how it computes, how it is classified,
+   the guideline action, its source and its validation status. The UI renders all of
+   them with one engine, so adding a score means adding one entry here plus its tests. */
+var DEF = (function () {
+  var CHECKED = '2026-11-07';
+
+  /* ---------- fields (stored internally in mg/dL, kg, cm, mmHg) ---------- */
+  function N(label, unit, o) { o = o || {}; o.type = 'num'; o.label = label; o.unit = unit; return o; }
+  function B(label, o) { o = o || {}; o.type = 'bool'; o.label = label; return o; }
+  function C(label, opts, o) { o = o || {}; o.type = 'choice'; o.label = label; o.opts = opts; return o; }
+  var CHOL = { unit: 'mmol/L', f: 1 / 38.67, dp: 2 }, TG = { unit: 'mmol/L', f: 1 / 88.57, dp: 2 }, CR = { unit: 'µmol/L', f: 88.4, dp: 0 };
+
+  var F = {
+    age: N('Age', 'yrs', { g: 'demo', min: 18, max: 110, step: 1 }),
+    sex: C('Sex', [['male', 'Male'], ['female', 'Female']], { g: 'demo' }),
+    wt: N('Weight', 'kg', { g: 'demo', min: 25, max: 300 }),
+    ht: N('Height', 'cm', { g: 'demo', min: 120, max: 230, step: 1 }),
+
+    sbp: N('Systolic BP', 'mmHg', { g: 'vit', min: 50, max: 260, step: 1 }),
+    dbp: N('Diastolic BP', 'mmHg', { g: 'vit', min: 20, max: 160, step: 1 }),
+    hr: N('Heart rate', 'bpm', { g: 'vit', min: 20, max: 250, step: 1 }),
+
+    tc: N('Total cholesterol', 'mg/dL', { g: 'lip', si: CHOL, min: 50, max: 600, step: 1 }),
+    hdl: N('HDL', 'mg/dL', { g: 'lip', si: CHOL, min: 10, max: 200, step: 1 }),
+    tg: N('Triglycerides', 'mg/dL', { g: 'lip', si: TG, min: 20, max: 3000, step: 1 }),
+    ldl: N('LDL (measured)', 'mg/dL', { g: 'lip', si: CHOL, min: 10, max: 500, step: 1 }),
+
+    cr: N('Creatinine', 'mg/dL', { g: 'ren', si: CR, min: 0.2, max: 20 }),
+    uacr: N('UACR', 'mg/g', { g: 'ren', min: 0, max: 10000 }),
+    hba1c: N('HbA1c', '%', { g: 'ren', min: 3, max: 20 }),
+    hscrp: N('hsCRP', 'mg/L', { g: 'ren', min: 0, max: 300 }),
+
+    smoker: B('Current smoker', { g: 'rf' }),
+    dm: B('Diabetes', { g: 'rf' }),
+    dmAge: N('Age at diabetes diagnosis', 'yrs', { g: 'rf', min: 1, max: 110, step: 1, show: function (s) { return !!s.dm; } }),
+    insulin: B('On insulin', { g: 'rf', show: function (s) { return !!s.dm; } }),
+    htn: B('Hypertension', { g: 'rf' }),
+    lipid: B('Hypercholesterolaemia', { g: 'rf' }),
+    famhx: B('Family history of premature CVD', { g: 'rf' }),
+
+    cad: B('Coronary artery disease', { g: 'hx' }),
+    cevd: B('Stroke / TIA / cerebrovascular', { g: 'hx' }),
+    pad: B('Peripheral artery disease', { g: 'hx' }),
+    aaa: B('Aortic aneurysm', { g: 'hx' }),
+    hf: B('Heart failure / LV dysfunction', { g: 'hx' }),
+    priorBleed: B('Prior major bleeding', { g: 'hx' }),
+
+    bptx: B('BP treatment', { g: 'rx' }),
+    statin: B('Statin', { g: 'rx' }),
+    antiplatelet: B('Antiplatelet', { g: 'rx' }),
+    anticoag: B('Anticoagulant', { g: 'rx' }),
+    nsaid: B('NSAID', { g: 'rx' }),
+
+    killip: C('Killip class', [['1', 'I'], ['2', 'II'], ['3', 'III'], ['4', 'IV']], { g: 'acs', def: '1' }),
+    arrest: B('Cardiac arrest at admission', { g: 'acs' }),
+    stdev: B('ST deviation', { g: 'acs' }),
+    enz: B('Raised troponin', { g: 'acs' }),
+
+    /* score-specific (shown on the score card, not in the profile) */
+    ascvdYrs: N('Years since first ASCVD event', 'yrs', { local: 1, min: 0, max: 80 }),
+    s2region: C('SMART2 calibration', [['veryhigh', 'Very high (Egypt)'], ['high', 'High'], ['moderate', 'Moderate'], ['low', 'Low']], { local: 1, def: 'veryhigh' }),
+    smAT: C('Antithrombotic', [['none', 'None'], ['aspirin', 'Single antiplatelet'], ['dapt', 'DAPT'], ['aspdoac', 'Aspirin + low-dose rivaroxaban']], { local: 1, autoDef: function (s) { return s.antiplatelet || s.anticoag ? 'aspirin' : 'none'; } }),
+    embolism: B('Prior systemic embolism', { local: 1 }),
+    vasc: B('Vascular disease (MI, PAD, aortic plaque)', { local: 1, auto: function (s) { return !!(s.cad || s.pad); } }),
+    hUnc: B('Uncontrolled HTN (SBP > 160)', { local: 1, auto: function (s) { return s.sbp > 160; } }),
+    renalDis: B('Renal disease (dialysis, transplant, Cr > 2.26)', { local: 1, auto: function (s) { return s.cr > 2.26; } }),
+    liverDis: B('Liver disease (cirrhosis, bilirubin > 2×, AST/ALT > 3×)', { local: 1 }),
+    labile: B('Labile INR (TTR < 60%)', { local: 1 }),
+    bleedDrugs: B('Antiplatelet or NSAID', { local: 1, auto: function (s) { return !!(s.antiplatelet || s.nsaid); } }),
+    alcohol: B('Alcohol ≥ 8 drinks/week', { local: 1 }),
+    indication: C('Indication', [['af', 'AF'], ['vte', 'VTE treatment']], { local: 1, def: 'af' }),
+    drug: C('DOAC', [['apixaban', 'Apixaban'], ['rivaroxaban', 'Rivaroxaban']], { local: 1, def: 'apixaban' }),
+    liverCP: C('Liver (Child-Pugh)', [['none', 'None'], ['A', 'A'], ['B', 'B'], ['C', 'C']], { local: 1, def: 'none' }),
+    inhibitor: B('Strong CYP3A4 + P-gp inhibitor', { local: 1 }),
+    inducer: B('Strong CYP3A4 / P-gp inducer', { local: 1 }),
+    knownCAD: B('Known CAD (stenosis ≥ 50%)', { local: 1, auto: function (s) { return !!s.cad; } }),
+    asa: B('Aspirin in past 7 days', { local: 1, auto: function (s) { return !!s.antiplatelet; } }),
+    angina2: B('≥ 2 angina episodes in 24 h', { local: 1 }),
+    anginaHx: B('History of angina', { local: 1 }),
+    antLBBB: B('Anterior STE or LBBB', { local: 1 }),
+    late: B('Time to treatment > 4 h', { local: 1 }),
+    highRiskSurg: B('High-risk surgery (intraperitoneal, intrathoracic, suprainguinal vascular)', { local: 1, auto: function (s) { return ['H:aortic', 'H:pancreas', 'H:liver', 'H:oesoph', 'H:bowel', 'H:pneumo', 'H:tx', 'H:adrenal', 'H:cystectomy', 'I:ip', 'I:thoracic', 'I:evar', 'L:vats'].indexOf(s.surgProc) > -1; } }),
+    ihd: B('Ischaemic heart disease', { local: 1, auto: function (s) { return !!s.cad; } }),
+    urgency: C('Timing of surgery', [['elective', 'Elective'], ['timesens', 'Time-sensitive'], ['urgent', 'Urgent / emergency']], { local: 1, def: 'elective' }),
+    surgProc: C('Procedure (ESC 2022 list)', [['', 'Choose procedure…'],
+      ['L:breast', 'Breast'], ['L:dental', 'Dental'], ['L:endocrine', 'Endocrine: thyroid'], ['L:eye', 'Eye'], ['L:gynminor', 'Gynaecological: minor'],
+      ['L:orthominor', 'Orthopaedic minor (meniscectomy)'], ['L:recon', 'Reconstructive'], ['L:superficial', 'Superficial surgery'], ['L:urominor', 'Urological minor (TURP)'], ['L:vats', 'VATS minor lung resection'],
+      ['I:carotidasx', 'Carotid asymptomatic (CEA or CAS)'], ['I:ceasx', 'Carotid symptomatic (CEA)'], ['I:evar', 'Endovascular aortic aneurysm repair'], ['I:headneck', 'Head and neck surgery'],
+      ['I:ip', 'Intraperitoneal: splenectomy, hiatal hernia repair, cholecystectomy'], ['I:thoracic', 'Intrathoracic: non-major'], ['I:neuroortho', 'Neurological or orthopaedic: major (hip and spine)'],
+      ['I:pta', 'Peripheral arterial angioplasty'], ['I:renaltx', 'Renal transplant'], ['I:urogynmajor', 'Urological or gynaecological: major'],
+      ['H:adrenal', 'Adrenal resection'], ['H:aortic', 'Aortic and major vascular surgery'], ['H:cas', 'Carotid symptomatic (CAS)'], ['H:pancreas', 'Duodenal-pancreatic surgery'],
+      ['H:liver', 'Liver resection, bile duct surgery'], ['H:oesoph', 'Oesophagectomy'], ['H:limb', 'Open lower-limb revascularisation for acute limb ischaemia, or amputation'],
+      ['H:pneumo', 'Pneumonectomy (VATS or open)'], ['H:tx', 'Pulmonary or liver transplant'], ['H:bowel', 'Repair of perforated bowel'], ['H:cystectomy', 'Total cystectomy']], { local: 1, def: '' }),
+    cvSymptoms: B('Symptoms or signs suggesting CVD (dyspnoea, chest pain, murmur)', { local: 1 }),
+    valve: B('Known significant valve disease', { local: 1 }),
+    bnpHigh: B('Raised NT-proBNP (> 300 pg/mL) or BNP (> 92 pg/mL)', { local: 1 }),
+    poorFC: B('Poor functional capacity (< 4 METs, cannot climb 2 flights)', { local: 1, auto: function (s) { return dasiOf(s).done && dasiOf(s).mets < 4; } }),
+    dasi1: B('Take care of yourself (eat, dress, bathe, toilet)', { local: 1 }),
+    dasi2: B('Walk indoors, such as around the house', { local: 1 }),
+    dasi3: B('Walk a block or two on level ground', { local: 1 }),
+    dasi4: B('Climb a flight of stairs or walk up a hill', { local: 1 }),
+    dasi5: B('Run a short distance', { local: 1 }),
+    dasi6: B('Light housework (dusting, washing dishes)', { local: 1 }),
+    dasi7: B('Moderate housework (vacuuming, sweeping, carrying groceries)', { local: 1 }),
+    dasi8: B('Heavy housework (scrubbing floors, lifting or moving furniture)', { local: 1 }),
+    dasi9: B('Yard work (raking leaves, weeding, pushing a mower)', { local: 1 }),
+    dasi10: B('Have sexual relations', { local: 1 }),
+    dasi11: B('Moderate recreation (golf, bowling, dancing, doubles tennis)', { local: 1 }),
+    dasi12: B('Strenuous sports (swimming, singles tennis, football, skiing)', { local: 1 }),
+    guptaFS: C('Functional status', [['indep', 'Independent'], ['partial', 'Partially dependent'], ['total', 'Totally dependent']], { local: 1, def: 'indep' }),
+    asaClass: C('ASA class', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']], { local: 1, def: '2' }),
+    guptaProc: C('Type of procedure', [['', 'Choose procedure…'], ['anorectal', 'Anorectal'], ['aortic', 'Aortic'], ['bariatric', 'Bariatric'], ['brain', 'Brain'], ['breast', 'Breast'], ['cardiac', 'Cardiac'],
+      ['ent', 'ENT (except thyroid/parathyroid)'], ['foregut', 'Foregut or hepatopancreatobiliary'], ['gallbladder', 'Gallbladder, appendix, adrenals or spleen'], ['hernia', 'Hernia (ventral, inguinal, femoral)'],
+      ['intestinal', 'Intestinal'], ['neck', 'Neck (thyroid/parathyroid)'], ['obgyn', 'Obstetric/gynaecologic'], ['ortho', 'Orthopaedic and non-vascular extremity'], ['otherabd', 'Other abdominal'],
+      ['pv', 'Peripheral vascular (non-aortic, non-vein)'], ['skin', 'Skin'], ['spine', 'Spine'], ['thoracic', 'Non-oesophageal thoracic'], ['vein', 'Vein'], ['urology', 'Urology']], { local: 1, def: '' }),
+    convVal: N('Value', '', { local: 1, nosi: 1 }),
+    convAn: C('Test', [['chol', 'Cholesterol'], ['tg', 'Triglycerides'], ['cr', 'Creatinine'], ['glu', 'Glucose'], ['hb', 'Haemoglobin']], { local: 1, def: 'chol' }),
+    convDir: C('Convert', [['toSI', 'Conventional → SI'], ['toConv', 'SI → conventional']], { local: 1, def: 'toSI' })
+  };
+
+  var GROUPS = [
+    ['demo', 'Patient'], ['vit', 'Vital signs'], ['lip', 'Lipids'], ['ren', 'Kidney and labs'],
+    ['rf', 'Risk factors'], ['hx', 'Cardiac and vascular history'], ['rx', 'Current medicines'], ['acs', 'Acute coronary presentation']
+  ];
+
+  /* ---------- value access ---------- */
+  function val(s, k) {                    // effective value: explicit entry, else auto rule, else default
+    var f = F[k], v = s[k];
+    if (f.type === 'num') { v = parseFloat(v); return isNaN(v) ? null : v; }
+    if (f.type === 'bool') { if (v === true || v === false) return v; return f.auto ? !!f.auto(raw(s)) : false; }
+    return v != null && v !== '' ? v : (f.autoDef ? f.autoDef(raw(s)) : (f.def || null));
+  }
+  function raw(s) { var o = {}; for (var k in F) if (F[k].type === 'num') { var n = parseFloat(s[k]); o[k] = isNaN(n) ? null : n; } else o[k] = s[k]; return o; }
+  function isAuto(s, k) { var f = F[k]; return f.type === 'bool' && f.auto && s[k] !== true && s[k] !== false && !!f.auto(raw(s)); }
+  function all(s) { var o = {}; for (var k in F) o[k] = val(s, k); return o; }
+
+  function derive(p) {
+    var d = {};
+    d.egfr = (p.cr && p.age && p.sex) ? RS.egfr(p.cr, p.age, p.sex) : null;
+    d.crcl = (p.sex) ? UT.crcl(p.cr, p.age, p.sex, p.wt) : null;
+    d.bmi = RS.bmi(p.wt, p.ht);
+    d.bsa = UT.bsa(p.wt, p.ht);
+    d.nonhdl = (p.tc && p.hdl) ? p.tc - p.hdl : null;
+    d.ldlF = UT.friedewald(p.tc, p.hdl, p.tg);
+    d.ldlS = UT.sampson(p.tc, p.hdl, p.tg);
+    d.map = UT.map(p.sbp, p.dbp);
+    d.pp = (p.sbp && p.dbp) ? p.sbp - p.dbp : null;
+    d.ascvd = !!(p.cad || p.cevd || p.pad || p.aaa);
+    return d;
+  }
+
+  /* ---------- helpers ---------- */
+  var f1 = function (x) { return (Math.round(x * 10) / 10).toFixed(1); };
+  var f0 = function (x) { return String(Math.round(x)); };
+  function need(p, keys) { return keys.filter(function (k) { return p[k] == null || p[k] === ''; }); }
+  function res(o) { o.ok = o.value != null; o.lines = o.lines || []; o.warn = o.warn || []; o.missing = o.missing || []; return o; }
+  var CAT4 = ['Low', 'Moderate', 'High', 'Very high'];
+
+  var DASI_W = [2.75, 1.75, 2.75, 5.50, 8.00, 2.70, 3.50, 8.00, 4.50, 5.25, 6.00, 7.50];
+  function dasiOf(st) {
+    var sc = 0, done = false;
+    for (var i = 0; i < 12; i++) if (st['dasi' + (i + 1)] === true) { sc += DASI_W[i]; done = true; }
+    var vo2 = 0.43 * sc + 9.6;
+    return { score: sc, vo2: vo2, mets: vo2 / 3.5, done: done };
+  }
+  function surgCat(code) { return code ? code.split(':')[0] : null; }
+  function procName(code) { var o = F.surgProc.opts.filter(function (x) { return x[0] === code; })[0]; return o ? o[1] : ''; }
+
+  /* ---------- score definitions ---------- */
+  var S = [];
+  function add(d) { d.checked = d.checked || CHECKED; S.push(d); }
+
+  /* ===== Prevention ===== */
+  add({
+    id: 'score2', name: 'SCORE2 family', domain: 'Prevention', scen: ['prev'],
+    blurb: 'ESC 10-year fatal and non-fatal CVD. Picks SCORE2, SCORE2-OP or SCORE2-Diabetes automatically.',
+    inputs: ['age', 'sex', 'sbp', 'tc', 'hdl', 'smoker', 'dm', 'dmAge', 'hba1c', 'cr', 'famhx'],
+    calc: function (p, d) {
+      if (d.ascvd) return res({ na: 'Established ASCVD in the profile: SCORE2 does not apply. Use SMART2.' });
+      var m = need(p, ['age', 'sex', 'sbp', 'tc', 'hdl']);
+      if (m.length) return res({ missing: m });
+      var q = { age: p.age, sex: p.sex, sbp: p.sbp, tc: p.tc, hdl: p.hdl, smoker: p.smoker, dm: p.dm, dmAge: p.dmAge, hba1c: p.hba1c, egfr: d.egfr, famhx: p.famhx, ascvd: false };
+      var r = RS.score2Auto(q);
+      var miss = [];
+      (r.missing || []).forEach(function (x) { miss.push(x.indexOf('diagnosis') > -1 ? 'dmAge' : x.indexOf('HbA1c') > -1 ? 'hba1c' : 'cr'); });
+      if (r.value == null) return res({ model: r.model, missing: miss, na: miss.length ? null : r.note });
+      var c = RS.riskCat(r.value), esc = r.model === 'SCORE2-Diabetes' ? null : RS.escAgeCat(r.value, p.age);
+      var lines = ['Model: ' + r.model + ' · very-high-risk region (Egypt)'];
+      if (r.mods.length) lines.push('Model ' + f1(r.raw) + '% · ' + r.mods.map(function (x) { return x.en; }).join(' · '));
+      if (esc) lines.push('ESC 2021 age-specific category: ' + esc);
+      if (r.note) lines.push(r.note);
+      var act;
+      if (r.model === 'SCORE2-Diabetes') act = c >= 3 ? 'Very high risk in diabetes: LDL goal < 55 mg/dL; consider SGLT2i or GLP-1 RA (ESC 2023).' : c === 2 ? 'High risk in diabetes: LDL goal < 70 mg/dL (ESC 2023).' : 'Moderate or low risk in diabetes: LDL goal < 100 mg/dL (ESC 2023).';
+      else act = esc === 'very high' ? 'Risk-factor treatment recommended (ESC 2021, class I). LDL goal < 55 mg/dL.' :
+        esc === 'high' ? 'Risk-factor treatment should be considered (ESC 2021, IIa). LDL goal < 70 mg/dL.' :
+          'Risk-factor treatment generally not recommended; lifestyle advice (ESC 2021).';
+      return res({ value: r.value, unit: '%', cat: c, catLabel: CAT4[c], lines: lines, action: act, model: r.model,
+        summary: r.model + ' ' + f1(r.value) + '% (10-yr CVD, ' + CAT4[c].toLowerCase() + (esc ? '; ESC ' + esc : '') + ')' });
+    },
+    source: 'SCORE2 / SCORE2-OP working groups, Eur Heart J 2021; SCORE2-Diabetes, Eur Heart J 2023. eGFR and family-history multipliers as in the clinic tool.',
+    status: 'verified', verifiedBy: 'MDCalc SCORE2, SCORE2-OP and SCORE2-Diabetes (10 patients, all within 0.1%) and the U-Prevent worked example'
+  });
+
+  add({
+    id: 'smart2', name: 'SMART2', domain: 'Prevention', scen: ['prev'],
+    blurb: '10-year recurrent MI, stroke or vascular death in established ASCVD.',
+    inputs: ['age', 'sex', 'sbp', 'tc', 'hdl', 'cr', 'smoker', 'dm', 'hscrp', 'cad', 'cevd', 'pad', 'aaa', 'antiplatelet', 'anticoag'],
+    local: ['smAT', 'ascvdYrs', 's2region'],
+    calc: function (p, d) {
+      if (!d.ascvd) return res({ na: 'For established ASCVD only. Tick CAD, cerebrovascular, PAD or aneurysm in the profile.' });
+      var m = need(p, ['age', 'sex', 'sbp', 'tc', 'hdl', 'cr']);
+      if (m.length) return res({ missing: m });
+      var r = UT.smart2({ age: p.age, sex: p.sex, smoker: p.smoker, dm: p.dm, sbp: p.sbp, tc: p.tc, hdl: p.hdl, hscrp: p.hscrp, egfr: d.egfr,
+        years: p.ascvdYrs || 0, cad: p.cad, cevd: p.cevd, pad: p.pad, aaa: p.aaa, at: p.smAT, region: p.s2region });
+      var c = r.value < 20 ? 2 : 3, lines = [];
+      if (r.crpImputed) lines.push('hsCRP not entered: median 2.0 mg/L assumed.');
+      if (p.age < 40 || p.age > 80) lines.push('Validated for ages 40–80.');
+      if (p.s2region === 'veryhigh') lines.push('No African calibration exists; the very-high-risk region is the closest match for Egypt.');
+      return res({ value: r.value, unit: '%', cat: c, catLabel: c === 3 ? 'Very high' : 'High', lines: lines,
+        action: 'Secondary prevention for all: LDL goal < 55 mg/dL with ≥ 50% reduction. A low result never justifies withholding indicated therapy.',
+        summary: 'SMART2 ' + f1(r.value) + '% (10-yr recurrent events)' });
+    },
+    source: 'Hageman et al., Eur Heart J 2022 (SMART2), supplementary table 2; antithrombotic effects as applied by U-Prevent.',
+    status: 'verified', verifiedBy: 'U-Prevent SMART2 (4 patients, all 4 regions and all 4 antithrombotic options)'
+  });
+
+  add({
+    id: 'prevent', name: 'PREVENT', domain: 'Prevention', scen: ['prev'],
+    blurb: 'AHA 2023 equations: 10- and 30-year total CVD, ASCVD and heart failure, ages 30–79.',
+    inputs: ['age', 'sex', 'sbp', 'tc', 'hdl', 'cr', 'wt', 'ht', 'bptx', 'statin', 'dm', 'smoker', 'hba1c', 'uacr'],
+    calc: function (p, d) {
+      if (d.ascvd) return res({ na: 'Primary prevention only; established ASCVD in the profile.' });
+      var m = need(p, ['age', 'sex', 'sbp', 'tc', 'hdl', 'cr', 'wt', 'ht']);
+      if (m.length) return res({ missing: m });
+      var r = RS.prevent({ age: p.age, sex: p.sex, sbp: p.sbp, tc: p.tc, hdl: p.hdl, dm: p.dm, smoker: p.smoker, egfr: d.egfr, bmi: d.bmi,
+        bptx: p.bptx, statin: p.statin, hba1c: p.hba1c, uacr: p.uacr });
+      if (!r.ok) return res({ na: r.warn.join(' ') });
+      var y = r.y10, c = RS.preventCat(y.total_cvd), L = ['Low', 'Borderline', 'Intermediate', 'High'];
+      var lines = ['10-yr ASCVD ' + f1(y.ascvd) + '% · heart failure ' + f1(y.heart_failure) + '%',
+        'Model: ' + r.model + (r.model === 'full' ? ' (US deprivation index left as missing)' : '')];
+      if (r.y30) lines.push('30-yr total CVD ' + f1(r.y30.total_cvd) + '% · ASCVD ' + f1(r.y30.ascvd) + '% · HF ' + f1(r.y30.heart_failure) + '%');
+      lines.push('US-derived; not calibrated for Egyptian patients.');
+      return res({ value: y.total_cvd, unit: '%', cat: c, catLabel: L[c], lines: lines, warn: r.warn.filter(function (w) { return w.indexOf('30-year') < 0; }),
+        action: 'Use alongside SCORE2; in Egypt SCORE2 (very-high-risk region) remains the reference for decisions.',
+        summary: 'PREVENT ' + f1(y.total_cvd) + '% 10-yr total CVD (' + L[c].toLowerCase() + ')' });
+    },
+    source: 'Khan et al., Circulation 2024 (PREVENT); HbA1c model as revised by the AHA on 14 Oct 2026.',
+    status: 'verified', verifiedBy: 'the AHA PREVENT online calculator (3 patients incl. HbA1c and full models) and MDCalc PREVENT (base and UACR models)'
+  });
+
+  add({
+    id: 'framingham', name: 'Framingham general CVD', domain: 'Prevention', scen: ['prev'],
+    blurb: '10-year general CVD, ages 30–74. US-derived; for comparison.',
+    inputs: ['age', 'sex', 'sbp', 'tc', 'hdl', 'bptx', 'smoker', 'dm'],
+    calc: function (p, d) {
+      if (d.ascvd) return res({ na: 'Primary prevention only.' });
+      var m = need(p, ['age', 'sex', 'sbp', 'tc', 'hdl']);
+      if (m.length) return res({ missing: m });
+      if (p.age < 30 || p.age > 74) return res({ na: 'Validated for ages 30–74.' });
+      var v = RS.framingham(p), c = v < 10 ? 0 : v < 20 ? 1 : 2;
+      return res({ value: v, unit: '%', cat: c, catLabel: ['Low', 'Intermediate', 'High'][c], lines: ['D’Agostino 2008 categories: < 10% low, 10–19% intermediate, ≥ 20% high.'],
+        summary: 'Framingham ' + f1(v) + '% 10-yr CVD' });
+    },
+    source: 'D’Agostino et al., Circulation 2008.',
+    status: 'ported'
+  });
+
+  /* ===== Atrial fibrillation ===== */
+  add({
+    id: 'cha2ds2va', name: 'CHA₂DS₂-VA', domain: 'Atrial fibrillation', scen: ['af'],
+    blurb: 'Stroke risk in AF (ESC 2024; sex no longer scored). CHA₂DS₂-VASc shown for reference.',
+    inputs: ['age', 'sex', 'hf', 'htn', 'dm', 'cevd'], local: ['embolism', 'vasc'],
+    calc: function (p) {
+      var m = need(p, ['age']);
+      if (m.length) return res({ missing: m });
+      var c = RS.chads({ age: p.age, sex: p.sex, chf: p.hf, htn: p.htn, dm: p.dm, stroke: p.cevd || p.embolism, vasc: p.vasc });
+      var cat = c.va === 0 ? 0 : c.va === 1 ? 1 : 3;
+      var act = c.va === 0 ? 'Oral anticoagulation not indicated for stroke prevention.' : c.va === 1 ? 'Oral anticoagulation should be considered (ESC 2024, IIa).' : 'Oral anticoagulation recommended (ESC 2024, class I). DOAC preferred.';
+      return res({ value: c.va, unit: '/ 8', cat: cat, catLabel: ['Low', 'Intermediate', '', 'High'][cat],
+        lines: ['CHA₂DS₂-VASc ' + c.vasc + (p.sex ? '' : ' (sex not entered)') + ' · untreated stroke/TIA/embolism ≈ ' + RS.VASC_RATE[Math.min(c.vasc, 9)] + '%/yr (Friberg 2012)'],
+        action: act, summary: 'CHA₂DS₂-VA ' + c.va + ' (CHA₂DS₂-VASc ' + c.vasc + ') · ' + act.split('(')[0].trim() });
+    },
+    source: 'Van Gelder et al., 2024 ESC AF guidelines; Friberg et al., Eur Heart J 2012.',
+    status: 'ported'
+  });
+
+  add({
+    id: 'hasbled', name: 'HAS-BLED', domain: 'Atrial fibrillation', scen: ['af'],
+    blurb: 'Bleeding risk on anticoagulation; flags modifiable factors.',
+    inputs: ['age', 'sbp', 'cr', 'cevd', 'priorBleed', 'antiplatelet', 'nsaid'], local: ['hUnc', 'renalDis', 'liverDis', 'labile', 'bleedDrugs', 'alcohol'],
+    calc: function (p) {
+      var m = need(p, ['age']);
+      if (m.length) return res({ missing: m });
+      var s = RS.hasbled({ hUncontrolled: p.hUnc, renal: p.renalDis, liver: p.liverDis, stroke: p.cevd, bleed: p.priorBleed, labile: p.labile, age: p.age, drugs: p.bleedDrugs, alcohol: p.alcohol });
+      var mod = [];
+      if (p.hUnc) mod.push('blood pressure'); if (p.labile) mod.push('INR control'); if (p.bleedDrugs) mod.push('antiplatelet/NSAID'); if (p.alcohol) mod.push('alcohol');
+      return res({ value: s, unit: '/ 9', cat: s >= 3 ? 2 : 0, catLabel: s >= 3 ? 'High' : 'Low–moderate',
+        lines: ['Major bleeds ≈ ' + (s > 5 ? '≥ 12.5' : RS.HASBLED_RATE[s]) + ' per 100 patient-years (Pisters 2010).'],
+        action: (mod.length ? 'Correct modifiable factors: ' + mod.join(', ') + '. ' : '') + 'A high score calls for closer follow-up; it is not a reason to withhold anticoagulation.',
+        summary: 'HAS-BLED ' + s + (s >= 3 ? ' (high bleeding risk)' : '') });
+    },
+    source: 'Pisters et al., Chest 2010; 2024 ESC AF guidelines.',
+    status: 'ported'
+  });
+
+  add({
+    id: 'doac', name: 'DOAC dose check', domain: 'Atrial fibrillation', scen: ['af'],
+    blurb: 'Apixaban or rivaroxaban dose for AF or VTE treatment, from age, weight and Cockcroft-Gault CrCl.',
+    inputs: ['age', 'sex', 'wt', 'cr', 'antiplatelet', 'nsaid'], local: ['indication', 'drug', 'liverCP', 'inhibitor', 'inducer'],
+    calc: function (p) {
+      var r = UT.doac({ indication: p.indication, drug: p.drug, age: p.age, sex: p.sex, wt: p.wt, cr: p.cr, liver: p.liverCP, inhibitor: p.inhibitor, inducer: p.inducer, bleedDrugs: p.antiplatelet || p.nsaid });
+      if (r.missing.length) return res({ missing: r.missing });
+      var name = p.drug === 'rivaroxaban' ? 'Rivaroxaban' : 'Apixaban';
+      return res({ value: r.dose, text: true, cat: r.cat, catLabel: r.cat === 0 ? 'Full dose' : r.cat === 1 ? 'Full dose, caution' : r.cat === 2 ? 'Reduced dose' : 'Avoid',
+        lines: ['CrCl ' + f0(r.crcl) + ' mL/min (Cockcroft-Gault, actual weight)'].concat(r.reasons), warn: r.warn,
+        action: (p.indication === 'vte' ? 'VTE treatment dosing (EU label). Not for active cancer-associated VTE without specialist review, or antiphospholipid syndrome.' : 'Non-valvular AF dosing (EU label). Not for mechanical valves or moderate–severe mitral stenosis.') + ' Edoxaban and dabigatran are not included (not available in Egypt).',
+        summary: name + ' ' + r.dose + (p.indication === 'vte' ? ' for VTE' : ' for AF') + ' (CrCl ' + f0(r.crcl) + ')' });
+    },
+    source: 'Apixaban (Eliquis) and rivaroxaban (Xarelto) EU SmPC; 2021 EHRA practical guide on NOACs; 2019 ESC pulmonary embolism guidelines.',
+    status: 'new'
+  });
+
+  /* ===== ACS ===== */
+  add({
+    id: 'grace', name: 'GRACE in-hospital', domain: 'ACS', scen: ['acs'],
+    blurb: 'In-hospital death in ACS (Granger 2003 points model).',
+    inputs: ['age', 'hr', 'sbp', 'cr', 'killip', 'arrest', 'stdev', 'enz'],
+    calc: function (p) {
+      var m = need(p, ['age', 'hr', 'sbp', 'cr']);
+      if (m.length) return res({ missing: m });
+      var g = RS.grace({ age: p.age, hr: p.hr, sbp: p.sbp, cr: p.cr, killip: +p.killip, arrest: p.arrest, stdev: p.stdev, enz: p.enz }), b = g.parts;
+      var cat = [0, 1, 3][g.cat];
+      return res({ value: g.total, unit: 'pts', cat: cat, catLabel: ['Low', 'Intermediate', 'High'][g.cat],
+        lines: ['In-hospital mortality ≈ ' + f1(g.prob) + '%', 'Age ' + b.age + ' · HR ' + b.hr + ' · SBP ' + b.sbp + ' · Cr ' + b.cr + ' · Killip ' + b.killip + ' · arrest ' + b.arrest + ' · ST ' + b.st + ' · troponin ' + b.enz,
+          'GRACE 1.0 points model; the GRACE 2.0 equations are not openly published.'],
+        action: g.total > 140 ? 'GRACE > 140: early invasive strategy within 24 h (ESC 2023).' : 'Bands: ≤ 108 low · 109–140 intermediate · > 140 high.',
+        summary: 'GRACE ' + g.total + ' (' + ['low', 'intermediate', 'high'][g.cat] + ', in-hospital death ' + f1(g.prob) + '%)' });
+    },
+    source: 'Granger et al., Arch Intern Med 2003; 2023 ESC ACS guidelines.',
+    status: 'ported'
+  });
+
+  add({
+    id: 'timiua', name: 'TIMI UA/NSTEMI', domain: 'ACS', scen: ['acs'],
+    blurb: '14-day death, MI or urgent revascularisation.',
+    inputs: ['age', 'famhx', 'htn', 'lipid', 'dm', 'smoker', 'stdev', 'enz'], local: ['knownCAD', 'asa', 'angina2'],
+    calc: function (p) {
+      var m = need(p, ['age']);
+      if (m.length) return res({ missing: m });
+      var t = RS.timiUA({ age: p.age, fhx: p.famhx, htn: p.htn, lipid: p.lipid, dm: p.dm, smoker: p.smoker, knownCAD: p.knownCAD, asa: p.asa, angina2: p.angina2, stdev: p.stdev, enz: p.enz });
+      var c = t.score <= 2 ? 0 : t.score <= 4 ? 1 : 3;
+      return res({ value: t.score, unit: '/ 7', cat: c, catLabel: ['Low', 'Intermediate', '', 'High'][c],
+        lines: ['14-day event rate ' + t.rate + '% (Antman 2000)', 'Risk factors counted: ' + t.rf + ' of 5 (≥ 3 scores 1)'],
+        summary: 'TIMI UA/NSTEMI ' + t.score + '/7 (' + t.rate + '% at 14 days)' });
+    },
+    source: 'Antman et al., JAMA 2000.',
+    status: 'ported'
+  });
+
+  add({
+    id: 'timistemi', name: 'TIMI STEMI', domain: 'ACS', scen: ['acs'],
+    blurb: '30-day mortality in STEMI.',
+    inputs: ['age', 'sbp', 'hr', 'killip', 'wt', 'dm', 'htn'], local: ['anginaHx', 'antLBBB', 'late'],
+    calc: function (p) {
+      var m = need(p, ['age', 'sbp', 'hr']);
+      if (m.length) return res({ missing: m });
+      var t = RS.timiSTEMI({ age: p.age, dm: p.dm, htn: p.htn, anginaHx: p.anginaHx, sbp: p.sbp, hr: p.hr, killip: +p.killip, weight: p.wt, antLBBB: p.antLBBB, late: p.late });
+      var c = t.score <= 3 ? 0 : t.score <= 6 ? 1 : 3;
+      return res({ value: t.score, unit: '/ 14', cat: c, catLabel: ['Low', 'Intermediate', '', 'High'][c],
+        lines: ['30-day mortality ' + t.rate + '% (Morrow 2000)'], warn: p.wt == null ? ['Weight not entered (< 67 kg scores 1).'] : [],
+        summary: 'TIMI STEMI ' + t.score + '/14 (' + t.rate + '% 30-day mortality)' });
+    },
+    source: 'Morrow et al., Circulation 2000.',
+    status: 'ported'
+  });
+
+  /* ===== Pre-operative ===== */
+  add({
+    id: 'rcri', name: 'RCRI', domain: 'Pre-operative', scen: ['preop'],
+    blurb: 'Revised Cardiac Risk Index for non-cardiac surgery.',
+    inputs: ['hf', 'cevd', 'dm', 'insulin', 'cr'], local: ['highRiskSurg', 'ihd'],
+    calc: function (p) {
+      var r = RS.rcri({ highRiskSurg: p.highRiskSurg, ihd: p.ihd, chf: p.hf, cvd: p.cevd, insulin: p.dm && p.insulin, cr: p.cr });
+      var s = r.score, c = Math.min(s, 3);
+      return res({ value: s, unit: '/ 6', cat: c, catLabel: 'Class ' + ['I', 'II', 'III', 'IV'][c],
+        lines: ['Major cardiac complications ' + r.lee + '% (Lee 1999)', '30-day death, MI or arrest ' + r.ccs + '% (Duceppe 2017)'],
+        warn: p.cr == null ? ['Creatinine not entered (> 2 mg/dL scores 1).'] : [],
+        action: s >= 1 ? 'RCRI ≥ 1: consider BNP/NT-proBNP and troponin before intermediate- or high-risk surgery (ESC 2022).' : 'RCRI 0: low clinical risk.',
+        summary: 'RCRI ' + s + ' (class ' + ['I', 'II', 'III', 'IV'][c] + ', MACE ' + r.ccs + '%)' });
+    },
+    source: 'Lee et al., Circulation 1999; Duceppe et al., Can J Cardiol 2017; 2022 ESC non-cardiac surgery guidelines.',
+    status: 'ported'
+  });
+
+  add({
+    id: 'esccat', name: 'ESC surgical risk category', domain: 'Pre-operative', scen: ['preop'],
+    blurb: 'Surgery-specific 30-day risk of CV death, MI or stroke (ESC 2022, Table 4).',
+    inputs: [], local: ['surgProc', 'urgency'],
+    calc: function (p) {
+      var c = surgCat(p.surgProc);
+      if (!c) return res({ missing: ['surgProc'] });
+      var L = { L: ['Low', '< 1%', 0], I: ['Intermediate', '1–5%', 1], H: ['High', '> 5%', 3] }[c];
+      return res({ value: L[0], text: true, cat: L[2], catLabel: L[1] + ' 30-day risk', lines: [procName(p.surgProc)],
+        summary: 'ESC surgical risk: ' + L[0].toLowerCase() + ' (' + procName(p.surgProc).toLowerCase() + ')' });
+    },
+    source: 'Halvorsen et al., 2022 ESC Guidelines on cardiovascular assessment and management of patients undergoing non-cardiac surgery, Table 4.',
+    status: 'new'
+  });
+
+  add({
+    id: 'dasi', name: 'DASI', domain: 'Pre-operative', scen: ['preop'],
+    blurb: 'Duke Activity Status Index: functional capacity from 12 activities the patient can do.',
+    inputs: [], local: ['dasi1', 'dasi2', 'dasi3', 'dasi4', 'dasi5', 'dasi6', 'dasi7', 'dasi8', 'dasi9', 'dasi10', 'dasi11', 'dasi12'],
+    calc: function (p, d, s) {
+      var x = dasiOf(s);
+      if (!x.done) return res({ hint: 'Tick each activity the patient can do without difficulty.' });
+      var cat = x.mets < 4 ? 3 : x.score <= 34 ? 1 : 0;
+      return res({ value: x.score, unit: '/ 58.2', cat: cat, catLabel: x.mets < 4 ? 'Poor (< 4 METs)' : x.score <= 34 ? 'Reduced' : 'Good',
+        lines: ['Estimated ' + x.mets.toFixed(1) + ' METs · peak VO₂ ' + x.vo2.toFixed(1) + ' mL/kg/min'],
+        action: x.mets < 4 ? 'Poor functional capacity: see the ESC pre-op pathway for further testing.' : x.score <= 34 ? 'DASI ≤ 34 was linked to more 30-day death or MI in the METS study.' : 'Functional capacity adequate.',
+        summary: 'DASI ' + x.score.toFixed(1) + ' (≈ ' + x.mets.toFixed(1) + ' METs)' });
+    },
+    source: 'Hlatky et al., Am J Cardiol 1989; Wijeysundera et al., Lancet 2018 (METS study).',
+    status: 'new'
+  });
+
+  var GUPTA = { anorectal: -0.16, aortic: 1.60, bariatric: -0.25, brain: 1.40, breast: -1.61, cardiac: 1.01, ent: 0.71, foregut: 1.39, gallbladder: 0.59, hernia: 0,
+    intestinal: 1.14, neck: 0.18, obgyn: 0.76, ortho: 0.80, otherabd: 1.13, pv: 0.86, skin: 0.54, spine: 0.21, thoracic: 0.40, vein: -1.09, urology: -0.26 };
+  add({
+    id: 'gupta', name: 'Gupta MICA', domain: 'Pre-operative', scen: ['preop'],
+    blurb: 'Risk of peri-operative MI or cardiac arrest within 30 days (NSQIP).',
+    inputs: ['age', 'cr'], local: ['guptaProc', 'asaClass', 'guptaFS'],
+    calc: function (p) {
+      var m = need(p, ['age']); if (!p.guptaProc) m.push('guptaProc');
+      if (m.length) return res({ missing: m });
+      var x = -5.25 + 0.02 * p.age + { indep: 0, partial: 0.65, total: 1.03 }[p.guptaFS] + { 1: -5.17, 2: -3.29, 3: -1.92, 4: -0.95, 5: 0 }[p.asaClass] +
+        (p.cr == null ? -0.10 : p.cr > 1.5 ? 0.61 : 0) + GUPTA[p.guptaProc];
+      var v = 100 * Math.exp(x) / (1 + Math.exp(x));
+      return res({ value: v, unit: '%', dp: 2, cat: v < 1 ? 0 : v < 2 ? 1 : v < 5 ? 2 : 3, catLabel: v < 1 ? 'Low (< 1%)' : 'Elevated (≥ 1%)',
+        warn: p.cr == null ? ['Creatinine not entered: scored as unknown.'] : [],
+        action: v >= 1 ? 'Risk ≥ 1%: elevated peri-operative cardiac risk.' : 'Risk < 1%: low peri-operative cardiac risk.',
+        summary: 'Gupta MICA ' + v.toFixed(2) + '%' });
+    },
+    source: 'Gupta et al., Circulation 2011; coefficients as published on MDCalc.',
+    status: 'verified', verifiedBy: 'the coefficients in the published model (MDCalc formula, checked 7 Nov 2026)'
+  });
+
+  add({
+    id: 'escpath', name: 'ESC 2022 pre-op pathway', domain: 'Pre-operative', scen: ['preop'],
+    blurb: 'Suggested pre-operative work-up from timing, surgical risk, patient risk, functional capacity and RCRI.',
+    inputs: ['age', 'htn', 'dm', 'smoker', 'lipid', 'famhx', 'cad', 'cevd', 'pad', 'hf'], local: ['urgency', 'surgProc', 'valve', 'cvSymptoms', 'poorFC', 'bnpHigh'],
+    calc: function (p, d, s) {
+      var c = surgCat(p.surgProc);
+      if (!c) return res({ missing: ['surgProc'] });
+      if (p.age == null) return res({ missing: ['age'] });
+      var cvd = !!(p.cad || p.cevd || p.pad || p.hf || p.valve), rf = p.age >= 65 || !!(p.htn || p.dm || p.smoker || p.lipid || p.famhx);
+      var rcri = RS.rcri({ highRiskSurg: p.highRiskSurg, ihd: p.ihd, chf: p.hf, cvd: p.cevd, insulin: p.dm && p.insulin, cr: p.cr }).score;
+      var group = cvd ? 'Known CVD' : rf ? 'Age ≥ 65 or CV risk factors' : 'Age < 65, no CVD or risk factors';
+      var L = [], W = [];
+      if (p.urgency === 'urgent') {
+        L.push('Urgent or emergency surgery: do not delay for cardiac testing.');
+        if (cvd || rf) L.push('hs-troponin before (if possible) and at 24 h and 48 h after surgery (I).');
+        L.push('Continue indicated cardiac medicines; manage peri-operatively.');
+      } else if (!cvd && !rf) {
+        if (c === 'L') L.push('Low-risk surgery: no further cardiac testing. Proceed.');
+        else L.push('ECG and biomarkers may be considered (IIb). Proceed if no new findings.');
+      } else if (c === 'L') {
+        L.push('Low-risk surgery: proceed; routine ECG and biomarkers are not needed' + (cvd ? ' (ECG may be considered in known CVD)' : '') + '.');
+      } else {
+        L.push('12-lead ECG before surgery.');
+        L.push('hs-troponin before surgery and at 24 h and 48 h after (I).');
+        L.push('NT-proBNP or BNP before surgery should be considered (IIa).');
+        if (c === 'H' && (p.poorFC || p.bnpHigh)) L.push('Transthoracic echo before high-risk surgery: poor functional capacity and/or raised NP (I).');
+        if (c === 'H' && p.poorFC && (p.cad || rcri >= 2)) L.push('Stress imaging before elective high-risk surgery: poor functional capacity with CAD or high clinical risk (RCRI ' + rcri + ') (I).');
+        if (p.urgency === 'timesens') W.push('Time-sensitive surgery: do only tests that would change management or timing.');
+      }
+      if (p.cvSymptoms) L.push('Symptoms or signs suggesting CVD: assess as for a non-surgical patient; TTE if murmur or unexplained dyspnoea' + (p.urgency === 'urgent' ? ' (do not delay urgent surgery)' : '') + '.');
+      if (!p.poorFC && c === 'H' && !dasiOf(s).done && p.urgency !== 'urgent' && (cvd || rf)) W.push('Functional capacity not assessed: complete DASI or ask about climbing 2 flights of stairs.');
+      var cat = p.urgency === 'urgent' ? 2 : (!cvd && !rf) || c === 'L' ? 0 : c === 'H' ? 2 : 1;
+      return res({ value: group, text: true, cat: cat, catLabel: { L: 'Low-risk', I: 'Intermediate-risk', H: 'High-risk' }[c] + ' surgery', lines: L, warn: W,
+        action: 'Simplified from the ESC 2022 flowcharts; clinical judgement decides. Class of recommendation in brackets.',
+        summary: 'ESC pre-op (' + group.toLowerCase() + ', ' + { L: 'low', I: 'intermediate', H: 'high' }[c] + '-risk surgery): ' + L.join(' ') });
+    },
+    source: 'Halvorsen et al., 2022 ESC Guidelines on non-cardiac surgery, Figures 4–6 and recommendation tables.',
+    status: 'new', review: 1
+  });
+
+  /* ===== Utilities ===== */
+  add({
+    id: 'kidney', name: 'Kidney function', domain: 'Utilities', scen: ['prev', 'af', 'acs', 'preop'],
+    blurb: 'eGFR (CKD-EPI 2021, race-free) and creatinine clearance (Cockcroft-Gault).',
+    inputs: ['cr', 'age', 'sex', 'wt'],
+    calc: function (p, d) {
+      var m = need(p, ['cr', 'age', 'sex']);
+      if (m.length) return res({ missing: m });
+      var st = RS.gStage(d.egfr);
+      return res({ value: d.egfr, unit: 'mL/min/1.73 m²', cat: d.egfr >= 60 ? 0 : d.egfr >= 30 ? 1 : d.egfr >= 15 ? 2 : 3, catLabel: 'CKD ' + st,
+        lines: [d.crcl != null ? 'CrCl ' + f0(d.crcl) + ' mL/min (Cockcroft-Gault, actual weight)' : 'Enter weight for creatinine clearance.'],
+        summary: 'eGFR ' + f0(d.egfr) + ' (' + st + ')' + (d.crcl != null ? ', CrCl ' + f0(d.crcl) : '') });
+    },
+    source: 'Inker et al., NEJM 2021 (CKD-EPI 2021); Cockcroft & Gault, Nephron 1976.',
+    status: 'new', utility: 1
+  });
+
+  add({
+    id: 'body', name: 'Body size', domain: 'Utilities', scen: ['prev', 'preop'],
+    blurb: 'BMI and body surface area (Mosteller).',
+    inputs: ['wt', 'ht'],
+    calc: function (p, d) {
+      var m = need(p, ['wt', 'ht']);
+      if (m.length) return res({ missing: m });
+      var b = d.bmi, c = b < 25 ? 0 : b < 30 ? 1 : b < 35 ? 2 : 3;
+      var lab = b < 18.5 ? 'Underweight' : b < 25 ? 'Normal' : b < 30 ? 'Overweight' : 'Obese';
+      return res({ value: b, unit: 'kg/m²', cat: b < 18.5 ? 1 : c, catLabel: lab, lines: ['BSA ' + d.bsa.toFixed(2) + ' m² (Mosteller)'],
+        summary: 'BMI ' + f1(b) + ', BSA ' + d.bsa.toFixed(2) + ' m²' });
+    },
+    source: 'WHO BMI classes; Mosteller, NEJM 1987.',
+    status: 'new', utility: 1
+  });
+
+  add({
+    id: 'lipids', name: 'Lipid calculations', domain: 'Utilities', scen: ['prev'],
+    blurb: 'Non-HDL cholesterol and calculated LDL (Sampson/NIH and Friedewald).',
+    inputs: ['tc', 'hdl', 'tg', 'ldl'],
+    calc: function (p, d) {
+      var m = need(p, ['tc', 'hdl']);
+      if (m.length) return res({ missing: m });
+      var lines = [];
+      if (d.ldlS != null) lines.push('LDL (Sampson/NIH) ' + f0(d.ldlS) + ' mg/dL' + (p.tg > 800 ? ' · TG > 800: measure LDL directly' : ''));
+      if (d.ldlF != null) lines.push('LDL (Friedewald) ' + f0(d.ldlF) + ' mg/dL' + (p.tg >= 150 ? ' · under-estimates LDL when TG ≥ 150; prefer Sampson' : ''));
+      else if (p.tg >= 400) lines.push('TG ≥ 400 mg/dL: Friedewald not valid.');
+      if (p.tg == null) lines.push('Enter triglycerides for calculated LDL.');
+      if (p.ldl != null) lines.push('LDL measured ' + f0(p.ldl) + ' mg/dL');
+      return res({ value: d.nonhdl, unit: 'mg/dL non-HDL', cat: null, lines: lines,
+        summary: 'Non-HDL ' + f0(d.nonhdl) + (d.ldlS != null ? ', LDL (Sampson) ' + f0(d.ldlS) : '') + (p.ldl != null ? ', LDL measured ' + f0(p.ldl) : '') + ' mg/dL' });
+    },
+    source: 'Sampson et al., JAMA Cardiol 2020 (NIH equation; matches MDCalc); Friedewald et al., Clin Chem 1972.',
+    status: 'new', utility: 1
+  });
+
+  add({
+    id: 'bp', name: 'Blood pressure', domain: 'Utilities', scen: [],
+    blurb: 'Mean arterial pressure and pulse pressure.',
+    inputs: ['sbp', 'dbp'],
+    calc: function (p, d) {
+      var m = need(p, ['sbp', 'dbp']);
+      if (m.length) return res({ missing: m });
+      return res({ value: d.map, unit: 'mmHg MAP', cat: null, lines: ['Pulse pressure ' + f0(d.pp) + ' mmHg'], summary: 'MAP ' + f0(d.map) + ', PP ' + f0(d.pp) + ' mmHg' });
+    },
+    source: 'MAP = DBP + (SBP − DBP) / 3.',
+    status: 'new', utility: 1
+  });
+
+  var CONV = { chol: [38.67, 'mg/dL', 'mmol/L'], tg: [88.57, 'mg/dL', 'mmol/L'], cr: [1 / 88.4, 'mg/dL', 'µmol/L'], glu: [18.016, 'mg/dL', 'mmol/L'], hb: [0.1, 'g/dL', 'g/L'] };
+  add({
+    id: 'convert', name: 'Unit converter', domain: 'Utilities', scen: [],
+    blurb: 'Cholesterol, triglycerides, creatinine, glucose and haemoglobin.',
+    inputs: [], local: ['convAn', 'convDir', 'convVal'], noSummary: 1,
+    calc: function (p) {
+      var c = CONV[p.convAn || 'chol'];
+      if (p.convVal == null) return res({ missing: ['convVal'], hint: 'Enter a value in ' + (p.convDir === 'toConv' ? c[2] : c[1]) + '.' });
+      var toSI = p.convDir !== 'toConv', v = toSI ? p.convVal / c[0] : p.convVal * c[0];
+      var dp = (toSI ? c[2] : c[1]) === 'µmol/L' || (toSI ? c[2] : c[1]) === 'g/L' ? 0 : 2;
+      return res({ value: v, dp: dp, unit: toSI ? c[2] : c[1], cat: null, lines: [p.convVal + ' ' + (toSI ? c[1] : c[2]) + ' = ' + v.toFixed(dp) + ' ' + (toSI ? c[2] : c[1])] });
+    },
+    source: 'Standard conversion factors.',
+    status: 'new', utility: 1
+  });
+
+  var SCEN = [
+    ['all', 'All scores'], ['fav', 'Favourites'], ['prev', 'Prevention visit'], ['af', 'New AF'], ['acs', 'ACS admission'], ['preop', 'Pre-op']
+  ];
+
+  function compute(state) {
+    var p = all(state), d = derive(p), out = {};
+    S.forEach(function (s) { try { out[s.id] = s.calc(p, d, state); } catch (e) { out[s.id] = res({ error: String(e && e.message || e) }); } });
+    return { p: p, d: d, r: out };
+  }
+
+  return { dasiOf: dasiOf, F: F, GROUPS: GROUPS, SCORES: S, SCEN: SCEN, val: val, isAuto: isAuto, all: all, derive: derive, compute: compute, CAT4: CAT4 };
+})();
+
+
+/* ===== UI: one shared patient state, one renderer for every score ===== */
+(function () {
+  var F = DEF.F, $ = function (s, r) { return (r || document).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var EXAMPLE = { age: '62', sex: 'male', wt: '84', ht: '172', sbp: '148', dbp: '88', hr: '78', tc: '232', hdl: '41', tg: '178', cr: '1.1',
+    smoker: true, htn: true, bptx: true, famhx: true };
+  var S = {}, isExample = true, units = 'conv', view = 'scores', scen = 'all', q = '', favs = [], last = null;
+  function store(k, v) { try { localStorage.setItem('cs.' + k, JSON.stringify(v)); } catch (e) { } }
+  function load(k, d) { try { var v = localStorage.getItem('cs.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+  favs = load('favs', ['score2', 'cha2ds2va', 'hasbled', 'doac', 'rcri']); units = load('units', 'conv');
+  Object.keys(EXAMPLE).forEach(function (k) { S[k] = EXAMPLE[k]; });
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function si(k) { return units === 'si' && F[k].si && !F[k].nosi ? F[k].si : null; }
+  function shown(k) { var c = si(k); if (S[k] == null || S[k] === '') return ''; if (!c) return S[k]; var n = parseFloat(S[k]) * c.f; return isNaN(n) ? '' : +n.toFixed(c.dp + 1); }
+  function unitOf(k) { var c = si(k); return c ? c.unit : F[k].unit; }
+  var nid = 0;
+
+  /* ---------- field widgets ---------- */
+  function field(k, o) {
+    o = o || {}; var f = F[k], id = 'i' + (++nid) + '_' + k, cls = 'f' + (o.need ? ' need' : '');
+    if (f.type === 'num') return '<div class="' + cls + '"><label for="' + id + '">' + esc(f.label) + '</label><div class="box"><input id="' + id + '" data-k="' + k + '" type="number" inputmode="decimal" step="any" value="' + esc(shown(k)) + '">' + (unitOf(k) ? '<span class="u">' + esc(unitOf(k)) + '</span>' : '') + '</div></div>';
+    if (f.type === 'choice' && f.opts.length > 5) return '<div class="' + cls + ' wide"><label for="' + id + '">' + esc(f.label) + '</label><div class="box"><select id="' + id + '" data-sel="' + k + '">' + f.opts.map(function (op) {
+      return '<option value="' + esc(op[0]) + '"' + (DEF.val(S, k) === op[0] || (!DEF.val(S, k) && op[0] === '') ? ' selected' : '') + '>' + esc(op[1]) + '</option>'; }).join('') + '</select></div></div>';
+    if (f.type === 'choice') return '<div class="' + cls + '"><span class="lb">' + esc(f.label) + '</span><div class="seg" role="group" aria-label="' + esc(f.label) + '">' + f.opts.map(function (op) {
+      return '<button type="button" data-ch="' + k + '" data-v="' + op[0] + '" aria-pressed="' + (DEF.val(S, k) === op[0]) + '">' + esc(op[1]) + '</button>'; }).join('') + '</div></div>';
+    var on = DEF.val(S, k), au = DEF.isAuto(S, k);
+    return '<button type="button" class="chip' + (au ? ' auto' : '') + '" data-b="' + k + '" aria-pressed="' + on + '"' + (au ? ' title="Ticked automatically from the profile; tap to override"' : '') + '>' + esc(f.label) + (au ? '<span class="tag">auto</span>' : '') + '</button>';
+  }
+  function fields(keys, needSet) {
+    var nums = keys.filter(function (k) { return F[k].type !== 'bool'; }), bools = keys.filter(function (k) { return F[k].type === 'bool'; }), h = '';
+    var ch = nums.filter(function (k) { return F[k].type === 'choice'; }), nn = nums.filter(function (k) { return F[k].type === 'num'; });
+    ch.forEach(function (k) { h += field(k, { need: needSet && needSet[k] }); });
+    if (nn.length) h += '<div class="grid">' + nn.map(function (k) { return field(k, { need: needSet && needSet[k] }); }).join('') + '</div>';
+    if (bools.length) h += '<div class="chips">' + bools.map(function (k) { return field(k); }).join('') + '</div>';
+    return h;
+  }
+
+  /* ---------- profile ---------- */
+  var openGroups = load('open', { demo: 1, vit: 1, lip: 1, ren: 1, rf: 1, hx: 1, rx: 0, acs: 0 });
+  function renderProfile() {
+    var h = isExample ? '<div class="example"><span>Showing an <b>example patient</b>. Edit any value or start a new patient.</span><button type="button" class="btn ghost" data-act="new">New patient</button></div>' : '';
+    DEF.GROUPS.forEach(function (g) {
+      var keys = Object.keys(F).filter(function (k) { return F[k].g === g[0] && !F[k].local && (!F[k].show || F[k].show(S)); });
+      var filled = keys.filter(function (k) { return F[k].type === 'bool' ? S[k] === true : S[k] != null && S[k] !== ''; }).length;
+      h += '<details class="grp" data-g="' + g[0] + '"' + (openGroups[g[0]] ? ' open' : '') + '><summary><span>' + g[1] + '</span><span class="cnt">' + (filled ? filled + ' entered' : '') + '</span></summary><div class="body">' +
+        fields(keys) + '<div class="derived" data-der="' + g[0] + '"></div></div></details>';
+    });
+    $('#profile').innerHTML = h;
+  }
+  function f0(x) { return String(Math.round(x)); }
+  function chol(x) { return units === 'si' ? (x / 38.67).toFixed(2) + ' mmol/L' : f0(x) + ' mg/dL'; }
+  function renderDerived(d) {
+    var m = {
+      demo: (d.bmi ? '<span class="pill">BMI ' + d.bmi.toFixed(1) + '</span><span class="pill">BSA ' + d.bsa.toFixed(2) + ' m²</span>' : ''),
+      vit: d.map ? '<span class="pill">MAP ' + f0(d.map) + '</span><span class="pill">PP ' + f0(d.pp) + '</span>' : '',
+      lip: (d.nonhdl != null ? '<span class="pill">Non-HDL ' + chol(d.nonhdl) + '</span>' : '') + (d.ldlS != null ? '<span class="pill">LDL calc ' + chol(d.ldlS) + '</span>' : d.ldlF != null ? '<span class="pill">LDL calc ' + chol(d.ldlF) + '</span>' : ''),
+      ren: (d.egfr ? '<span class="pill">eGFR ' + f0(d.egfr) + ' · ' + RS.gStage(d.egfr) + '</span>' : '') + (d.crcl ? '<span class="pill">CrCl ' + f0(d.crcl) + ' mL/min</span>' : ''),
+      hx: d.ascvd ? '<span class="pill">Established ASCVD</span>' : ''
+    };
+    $$('[data-der]').forEach(function (el) { el.innerHTML = m[el.getAttribute('data-der')] || ''; });
+  }
+
+  /* ---------- score cards ---------- */
+  var STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.2l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+  var STATUS = { ported: 'Ported from your clinic tool; matches it in automated tests. Official-calculator check pending.', new: 'New; hand-checked test cases. Official-calculator check pending.', verified: 'Verified against the official calculator.' };
+  function visible() {
+    var t = q.trim().toLowerCase();
+    return DEF.SCORES.filter(function (s) {
+      if (scen === 'fav' && favs.indexOf(s.id) < 0) return false;
+      if (scen !== 'all' && scen !== 'fav' && s.scen.indexOf(scen) < 0) return false;
+      if (t && (s.name + ' ' + s.blurb + ' ' + s.domain).toLowerCase().indexOf(t) < 0) return false;
+      return true;
+    });
+  }
+  function renderScores() {
+    $('#scen').innerHTML = DEF.SCEN.map(function (c) { return '<button type="button" data-scen="' + c[0] + '" aria-pressed="' + (scen === c[0]) + '">' + c[1] + (c[0] === 'fav' ? ' (' + favs.length + ')' : '') + '</button>'; }).join('');
+    var list = visible(), h = '', dom = null;
+    if (!list.length) h = '<div class="empty">' + (scen === 'fav' ? 'No favourites yet. Tap the star on any score to add it here.' : 'No score matches “' + esc(q) + '”.') + '</div>';
+    else {
+      h = '';
+      list.forEach(function (s) {
+        if (s.domain !== dom) { if (dom !== null) h += '</div>'; dom = s.domain; h += '<h2 class="dom-h">' + esc(dom) + '</h2><div class="cards">'; }
+        h += '<article class="sc" data-id="' + s.id + '"><header><div class="tt"><h3>' + esc(s.name) + '</h3></div><button type="button" class="fav" data-fav="' + s.id + '" aria-pressed="' + (favs.indexOf(s.id) > -1) + '" aria-label="Favourite ' + esc(s.name) + '">' + STAR + '</button></header>' +
+          '<p class="blurb">' + esc(s.blurb) + '</p><div class="res" data-res="' + s.id + '"></div><div class="ins" data-ins="' + s.id + '"></div>' +
+          (s.inputs.length || s.source ? '<details class="more"><summary>All inputs and source</summary><div class="mb" data-all="' + s.id + '"></div></details>' : '') + '</article>';
+      });
+      h += '</div>';
+    }
+    $('#cards').innerHTML = h;
+    renderIns(); renderAll(); update();
+  }
+  function renderIns() {
+    var R = DEF.compute(S).r;
+    $$('[data-ins]').forEach(function (el) {
+      var s = DEF.SCORES.filter(function (x) { return x.id === el.getAttribute('data-ins'); })[0], r = R[s.id];
+      if (r.na) { el.innerHTML = ''; return; }
+      var miss = (r.missing || []).filter(function (k) { return !F[k].local; }), need = {};
+      miss.forEach(function (k) { need[k] = 1; });
+      (s.local || []).forEach(function (k) { if (F[k].type === 'num' && r.missing && r.missing.indexOf(k) > -1) need[k] = 1; });
+      el.innerHTML = fields(miss.concat(s.local || []), need);
+    });
+  }
+  function renderAll() {
+    $$('[data-all]').forEach(function (el) {
+      var s = DEF.SCORES.filter(function (x) { return x.id === el.getAttribute('data-all'); })[0];
+      el.innerHTML = (s.inputs.length ? fields(s.inputs.filter(function (k) { return !F[k].show || F[k].show(S); })) : '') +
+        '<p class="src">' + esc(s.source) + '</p><p class="src"><span class="badge">' + esc(s.status === 'verified' && s.verifiedBy ? 'Verified against ' + s.verifiedBy + '.' : STATUS[s.status]) + '</span> Checked ' + s.checked + '.</p>';
+    });
+  }
+  function fmt(r) {
+    if (r.text) return String(r.value);
+    var dp = r.dp != null ? r.dp : (r.unit === '%' ? 1 : (Math.abs(r.value) < 10 && r.value % 1 ? 1 : 0));
+    return Number(r.value).toFixed(dp);
+  }
+  function resHTML(r) {
+    if (r.error) return '<p class="wn">Could not calculate: ' + esc(r.error) + '</p>';
+    if (r.na) return '<p class="na">' + esc(r.na) + '</p>';
+    if (!r.ok && r.hint && !r.missing.length) return '<p class="na">' + esc(r.hint) + '</p>';
+    if (!r.ok) return r.missing.length ? '<p class="needs">Needs ' + r.missing.map(function (k) { return esc(F[k].label); }).join(', ') + '</p>' : '';
+    var h = '<div class="big"><span class="v' + (r.text ? ' txt' : '') + '">' + esc(fmt(r)) + '</span>' + (r.unit ? '<span class="un">' + esc(r.unit) + '</span>' : '') +
+      (r.catLabel && r.cat != null ? '<span class="cat c' + r.cat + '">' + esc(r.catLabel) + '</span>' : '') + '</div>';
+    r.lines.forEach(function (l) { h += '<p class="ln mut">' + esc(l) + '</p>'; });
+    r.warn.forEach(function (w) { h += '<p class="wn">' + esc(w) + '</p>'; });
+    if (r.action) h += '<p class="act">' + esc(r.action) + '</p>';
+    return h;
+  }
+  function update() {
+    var C = DEF.compute(S); last = C;
+    renderDerived(C.d);
+    $$('[data-res]').forEach(function (el) {
+      var id = el.getAttribute('data-res'), r = C.r[id];
+      el.innerHTML = resHTML(r);
+      el.closest('.sc').setAttribute('data-cat', r.ok ? (r.cat == null ? 'x' : r.cat) : '');
+    });
+    if (view === 'summary') renderSummary();
+  }
+
+  /* ---------- summary ---------- */
+  function summaryText() {
+    var C = last || DEF.compute(S), p = C.p, d = C.d, L = [];
+    var date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    L.push('Cardiac risk scores · ' + date);
+    var pt = [];
+    if (p.age) pt.push(p.age + ' y'); if (p.sex) pt.push(p.sex);
+    if (p.sbp) pt.push('BP ' + p.sbp + (p.dbp ? '/' + p.dbp : '')); if (p.tc) pt.push('TC ' + chol(p.tc)); if (p.hdl) pt.push('HDL ' + chol(p.hdl));
+    if (d.egfr) pt.push('eGFR ' + f0(d.egfr));
+    var rf = ['smoker', 'dm', 'htn', 'famhx', 'cad', 'cevd', 'pad', 'hf'].filter(function (k) { return p[k]; }).map(function (k) { return F[k].label; });
+    if (pt.length) L.push('Patient: ' + pt.join(', ') + (rf.length ? '; ' + rf.join(', ') : ''));
+    L.push('');
+    var list = scen === 'all' ? DEF.SCORES : visible(), n = 0;
+    list.forEach(function (s) { var r = C.r[s.id]; if (r && r.ok && r.summary && !s.noSummary) { L.push('• ' + r.summary); n++; } });
+    if (!n) L.push('No scores calculated yet.');
+    L.push('', 'Scores support, and do not replace, clinical judgement.');
+    return L.join('\n');
+  }
+  function renderSummary() {
+    var t = summaryText();
+    $('#summary').innerHTML = '<div class="colhead"><div class="note">' + (scen === 'all' ? 'All calculated scores' : 'Scores in “' + esc(DEF.SCEN.filter(function (c) { return c[0] === scen; })[0][1]) + '”') + '</div>' +
+      '<div class="vt" role="group" aria-label="View"><button type="button" data-view="scores" aria-pressed="false">Scores</button><button type="button" data-view="summary" aria-pressed="true">Summary</button></div></div>' +
+      '<div class="sum"><h2>Summary for the report</h2><pre id="sumtext">' + esc(t) + '</pre><div class="row"><button type="button" class="btn" data-act="copy">Copy summary</button><span class="note" id="copied" aria-live="polite"></span></div>' +
+      '<p class="note">Paste into your echo, Holter or pre-op report. Choose a scenario first to copy only that set.</p></div>';
+  }
+
+  /* ---------- events ---------- */
+  function setView(v) {
+    view = v; document.body.setAttribute('data-view', v);
+    $$('.views button').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-view') === v); });
+    $$('#scorecol .vt button').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-view') === v); });
+    if (v === 'summary') renderSummary();
+    window.scrollTo(0, 0);
+  }
+  function refreshForms() { renderProfile(); renderIns(); renderAll(); update(); }
+  function leaveExample() { if (isExample) { isExample = false; var ex = $('.example'); if (ex) ex.remove(); } }
+
+  document.addEventListener('input', function (e) {
+    var k = e.target.getAttribute && e.target.getAttribute('data-k');
+    if (k) {
+      var c = si(k), v = e.target.value;
+      S[k] = v === '' ? '' : (c ? String(parseFloat(v) / c.f) : v);
+      leaveExample();
+      $$('input[data-k="' + k + '"]').forEach(function (el) { if (el !== e.target) el.value = shown(k); });
+      var fd = F[k], n = parseFloat(S[k]), out = fd.min != null && !isNaN(n) && (n < fd.min || n > fd.max);
+      e.target.closest('.f').classList.toggle('out', !!out);
+      update();
+    } else if (e.target.id === 'q') { q = e.target.value; renderScores(); }
+  });
+  document.addEventListener('change', function (e) {
+    var sk = e.target.getAttribute && e.target.getAttribute('data-sel');
+    if (sk) { S[sk] = e.target.value; leaveExample(); refreshForms(); return; }
+    if (e.target.getAttribute && e.target.getAttribute('data-k')) { var a = document.activeElement; if (!a || !a.closest || !a.closest('.ins')) { renderIns(); } }
+  });
+  document.addEventListener('focusout', function (e) {
+    if (e.target.closest && e.target.closest('.ins') && e.target.getAttribute('data-k')) setTimeout(function () { var a = document.activeElement; if (!a || !a.closest || !a.closest('.ins')) renderIns(); }, 0);
+  });
+  document.addEventListener('toggle', function (e) {
+    var g = e.target.getAttribute && e.target.getAttribute('data-g'); if (g) { openGroups[g] = e.target.open ? 1 : 0; store('open', openGroups); }
+  }, true);
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var k;
+    if ((k = b.getAttribute('data-b'))) { S[k] = !DEF.val(S, k); leaveExample(); refreshForms(); return; }
+    if ((k = b.getAttribute('data-ch'))) { S[k] = b.getAttribute('data-v'); leaveExample(); refreshForms(); return; }
+    if ((k = b.getAttribute('data-fav'))) { var i = favs.indexOf(k); if (i > -1) favs.splice(i, 1); else favs.push(k); store('favs', favs); if (scen === 'fav') renderScores(); else { b.setAttribute('aria-pressed', i < 0); $('[data-scen="fav"]').textContent = 'Favourites (' + favs.length + ')'; } return; }
+    if ((k = b.getAttribute('data-scen'))) { scen = k; renderScores(); return; }
+    if ((k = b.getAttribute('data-view'))) { setView(k); return; }
+    if ((k = b.getAttribute('data-units'))) { units = k; store('units', units); $$('[data-units]').forEach(function (x) { x.setAttribute('aria-pressed', x.getAttribute('data-units') === units); }); refreshForms(); return; }
+    var act = b.getAttribute('data-act');
+    if (act === 'new') { S = {}; isExample = false; refreshForms(); if (window.innerWidth <= 900) setView('patient'); var f = $('#profile input'); if (f) f.focus(); }
+    else if (act === 'example') { S = {}; Object.keys(EXAMPLE).forEach(function (x) { S[x] = EXAMPLE[x]; }); isExample = true; refreshForms(); }
+    else if (act === 'copy') {
+      var t = summaryText(), msg = $('#copied');
+      var sel = function () { var el = $('#sumtext'), r = document.createRange(); r.selectNodeContents(el); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); msg.textContent = 'Text selected: press Ctrl+C (or Copy) to finish.'; };
+      try { navigator.clipboard.writeText(t).then(function () { msg.textContent = 'Copied.'; }, sel); } catch (er) { sel(); }
+    }
+  });
+
+  /* ---------- boot ---------- */
+  $$('[data-units]').forEach(function (x) { x.setAttribute('aria-pressed', x.getAttribute('data-units') === units); });
+  renderProfile(); renderScores(); setView('scores');
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !/claude|claudeusercontent/.test(location.hostname)) {
+    try { navigator.serviceWorker.register('sw.js').catch(function () { }); } catch (e) { }
+  }
+})();
+</script>
+</body></html>

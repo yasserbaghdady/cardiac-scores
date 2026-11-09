@@ -188,7 +188,7 @@ body:not([data-view="summary"]) #summary{display:none}
       <div class="vt" role="group" aria-label="View"><button type="button" data-view="scores" aria-pressed="true">Scores</button><button type="button" data-view="summary" aria-pressed="false">Summary</button></div>
     </div>
     <div id="cards"></div>
-    <p class="foot">Results support, and do not replace, clinical judgement. Nothing you enter leaves this device. Build 1a · 07 Nov 2026</p>
+    <p class="foot">Results support, and do not replace, clinical judgement. Nothing you enter leaves this device. Build 2 · 09 Nov 2026</p>
   </section>
   <section id="summary" aria-label="Summary"></section>
 </main>
@@ -527,7 +527,82 @@ var UT = (function () {
     return { value: 100 * (1 - Math.pow(1 - 0.165822797, Math.exp(lp + 0.0463729 - Math.log(eo)))), crpImputed: b.crpImputed, lp: lp };
   }
 
-  return { crcl: crcl, bsa: bsa, friedewald: friedewald, sampson: sampson, map: map, doac: doac, smart2: smart2 };
+  /* ===== Phase 2: ACS and intervention (pure functions) ===== */
+  function band(x, edges, pts) { for (var i = 0; i < edges.length; i++) if (x <= edges[i]) return pts[i]; return pts[edges.length]; }
+
+  /* CRUSADE in-hospital major bleeding (Subherwal 2009). hct %, crcl mL/min (Cockcroft-Gault). */
+  function crusade(o) {
+    var p = {
+      hct: o.hct < 31 ? 9 : o.hct < 34 ? 7 : o.hct < 37 ? 3 : o.hct < 40 ? 2 : 0,
+      crcl: band(o.crcl, [15, 30, 60, 90, 120], [39, 35, 28, 17, 7, 0]),
+      hr: band(o.hr, [70, 80, 90, 100, 110, 120], [0, 1, 3, 6, 8, 10, 11]),
+      sex: o.sex === 'female' ? 8 : 0, chf: o.chf ? 7 : 0, vasc: o.vasc ? 6 : 0, dm: o.dm ? 6 : 0,
+      sbp: band(o.sbp, [90, 100, 120, 180, 200], [10, 8, 5, 1, 3, 5])
+    };
+    var s = p.hct + p.crcl + p.hr + p.sex + p.chf + p.vasc + p.dm + p.sbp;
+    var g = s <= 20 ? 0 : s <= 30 ? 1 : s <= 40 ? 2 : s <= 50 ? 3 : 4;
+    return { score: s, parts: p, grade: g, label: ['Very low', 'Low', 'Moderate', 'High', 'Very high'][g], rate: [3.1, 5.5, 8.6, 11.9, 19.5][g] };
+  }
+
+  /* ESC 0/1-h hs-troponin algorithm, assay-specific cut-offs in ng/L:
+     [very low, low, no 1-h delta, high, 1-h delta] (2020/2023 ESC NSTE-ACS guidelines). */
+  var TN = {
+    elecsys: ['hs-cTnT Elecsys (Roche)', 5, 12, 3, 52, 5], architect: ['hs-cTnI Architect (Abbott)', 4, 5, 2, 64, 6],
+    centaur: ['hs-cTnI Centaur (Siemens)', 3, 6, 3, 120, 12], access: ['hs-cTnI Access (Beckman Coulter)', 4, 5, 4, 50, 15],
+    clarity: ['hs-cTnI Clarity (Singulex)', 1, 2, 1, 30, 6], vitros: ['hs-cTnI Vitros (Ortho)', 1, 2, 1, 40, 4],
+    pathfast: ['hs-cTnI Pathfast (LSI Medience)', 3, 4, 3, 90, 20], triage: ['hs-cTnI TriageTrue (Quidel)', 4, 5, 3, 60, 8],
+    dimension: ['hs-cTnI Dimension EXL (Siemens)', 9, 9, 5, 160, 100]
+  };
+  function tn01(o) {
+    var c = TN[o.assay], r = { assay: c[0], cut: c.slice(1) };
+    if (o.t0 < c[1] && o.onset3h) { r.out = 'out'; r.why = '0-h value below ' + c[1] + ' ng/L with chest pain onset more than 3 h ago.'; return r; }
+    if (o.t0 >= c[4]) { r.out = 'in'; r.why = '0-h value ≥ ' + c[4] + ' ng/L.'; return r; }
+    if (o.t1 == null) { r.out = null; r.why = 'Repeat troponin at 1 h.'; return r; }
+    var d = Math.abs(o.t1 - o.t0); r.delta = d;
+    if (d >= c[5]) { r.out = 'in'; r.why = '1-h change ' + (Math.round(d * 10) / 10) + ' ng/L (≥ ' + c[5] + ').'; }
+    else if (o.t0 < c[2] && d < c[3]) { r.out = 'out'; r.why = '0-h value below ' + c[2] + ' ng/L and 1-h change below ' + c[3] + ' ng/L.'; }
+    else { r.out = 'observe'; r.why = 'Neither rule-out nor rule-in criteria met.'; }
+    return r;
+  }
+
+  /* PRECISE-DAPT (Costa 2017). The official model is not published as a formula; these slopes were
+     recovered from the MDCalc calculator on 9 Nov 2026 and reproduce it exactly on all cases tested.
+     hb g/dL, wbc 10^9/L, crcl mL/min. */
+  function precise(o) {
+    var cl = function (x, a, b) { return Math.min(b, Math.max(a, x)); };
+    var raw = 0.4696 * (cl(o.age, 50, 90) - 50) + 7.335 * (12 - cl(o.hb, 10, 12)) + 1.031 * (cl(o.wbc, 5, 20) - 5) + 0.254 * (100 - cl(o.crcl, 0, 100)) + (o.bleed ? 25.68 : 0);
+    var s = Math.round(raw), g = s <= 10 ? 0 : s <= 17 ? 1 : s <= 24 ? 2 : 3;
+    return { score: s, raw: raw, grade: g, label: ['Very low', 'Low', 'Moderate', 'High'][g] };
+  }
+
+  /* EuroSCORE II (Nashef 2012) */
+  function euroscore(o) {
+    var x = -5.324537 + 0.0285181 * (o.age <= 60 ? 1 : o.age - 59);
+    if (o.sex === 'female') x += 0.2196434;
+    x += o.dialysis ? 0.6421508 : o.crcl > 85 ? 0 : o.crcl > 50 ? 0.303553 : 0.8592256;
+    if (o.art) x += 0.5360268; if (o.mob) x += 0.2407181; if (o.prev) x += 1.118599; if (o.lung) x += 0.1886564;
+    if (o.endo) x += 0.6194522; if (o.crit) x += 1.086517; if (o.iddm) x += 0.3542749;
+    x += [0, 0, 0.1070545, 0.2958358, 0.5597929][+o.nyha || 1];
+    if (o.ccs4) x += 0.2226147;
+    x += { good: 0, mod: 0.3150652, poor: 0.8084096, vpoor: 0.9346919 }[o.lv || 'good'];
+    if (o.mi) x += 0.1528943;
+    x += { none: 0, mod: 0.1788899, sev: 0.3491475 }[o.ph || 'none'];
+    x += { elective: 0, urgent: 0.3174673, emergency: 0.7039121, salvage: 1.362947 }[o.urg || 'elective'];
+    x += { cabg: 0, single: 0.0062118, two: 0.5521478, three: 0.9724533 }[o.weight || 'cabg'];
+    if (o.aorta) x += 0.6527205;
+    return 100 * Math.exp(x) / (1 + Math.exp(x));
+  }
+
+  /* Mehran contrast-nephropathy score (2004), eGFR version */
+  function mehran(o) {
+    var s = (o.hypo ? 5 : 0) + (o.iabp ? 5 : 0) + (o.chf ? 5 : 0) + (o.age > 75 ? 4 : 0) + (o.anaemia ? 3 : 0) + (o.dm ? 3 : 0) +
+      Math.floor((o.contrast || 0) / 100) + (o.egfr < 20 ? 6 : o.egfr < 40 ? 4 : o.egfr < 60 ? 2 : 0);
+    var g = s <= 5 ? 0 : s <= 10 ? 1 : s <= 15 ? 2 : 3;
+    return { score: s, grade: g, label: ['Low', 'Moderate', 'High', 'Very high'][g], cin: [7.5, 14.0, 26.1, 57.3][g], dialysis: [0.04, 0.12, 1.09, 12.6][g] };
+  }
+
+  return { crcl: crcl, bsa: bsa, friedewald: friedewald, sampson: sampson, map: map, doac: doac, smart2: smart2,
+    crusade: crusade, tn01: tn01, TN: TN, precise: precise, euroscore: euroscore, mehran: mehran };
 })();
 
 
@@ -564,6 +639,11 @@ var DEF = (function () {
     hba1c: N('HbA1c', '%', { g: 'ren', min: 3, max: 20 }),
     hscrp: N('hsCRP', 'mg/L', { g: 'ren', min: 0, max: 300 }),
 
+    hb: N('Haemoglobin', 'g/dL', { g: 'bld', si: { unit: 'g/L', f: 10, dp: 0 }, min: 3, max: 25 }),
+    hct: N('Haematocrit', '%', { g: 'bld', min: 10, max: 70 }),
+    wbc: N('White cells', '×10⁹/L', { g: 'bld', min: 0.5, max: 100 }),
+    plt: N('Platelets', '×10⁹/L', { g: 'bld', min: 5, max: 1500, step: 1 }),
+
     smoker: B('Current smoker', { g: 'rf' }),
     dm: B('Diabetes', { g: 'rf' }),
     dmAge: N('Age at diabetes diagnosis', 'yrs', { g: 'rf', min: 1, max: 110, step: 1, show: function (s) { return !!s.dm; } }),
@@ -578,6 +658,7 @@ var DEF = (function () {
     aaa: B('Aortic aneurysm', { g: 'hx' }),
     hf: B('Heart failure / LV dysfunction', { g: 'hx' }),
     priorBleed: B('Prior major bleeding', { g: 'hx' }),
+    ef: N('LV ejection fraction', '%', { g: 'hx', min: 5, max: 85, step: 1 }),
 
     bptx: B('BP treatment', { g: 'rx' }),
     statin: B('Statin', { g: 'rx' }),
@@ -647,13 +728,55 @@ var DEF = (function () {
       ['ent', 'ENT (except thyroid/parathyroid)'], ['foregut', 'Foregut or hepatopancreatobiliary'], ['gallbladder', 'Gallbladder, appendix, adrenals or spleen'], ['hernia', 'Hernia (ventral, inguinal, femoral)'],
       ['intestinal', 'Intestinal'], ['neck', 'Neck (thyroid/parathyroid)'], ['obgyn', 'Obstetric/gynaecologic'], ['ortho', 'Orthopaedic and non-vascular extremity'], ['otherabd', 'Other abdominal'],
       ['pv', 'Peripheral vascular (non-aortic, non-vein)'], ['skin', 'Skin'], ['spine', 'Spine'], ['thoracic', 'Non-oesophageal thoracic'], ['vein', 'Vein'], ['urology', 'Urology']], { local: 1, def: '' }),
+    heartHx: C('History', [['0', 'Slightly suspicious'], ['1', 'Moderately suspicious'], ['2', 'Highly suspicious']], { local: 1 }),
+    heartEcg: C('ECG', [['0', 'Normal'], ['1', 'Non-specific repolarisation'], ['2', 'Significant ST deviation']], { local: 1, autoDef: function (s) { return s.stdev ? '2' : null; } }),
+    heartTn: C('Troponin', [['0', '≤ normal limit'], ['1', '1–3× normal limit'], ['2', '> 3× normal limit']], { local: 1 }),
+    chfSigns: B('Signs of heart failure at presentation', { local: 1, auto: function (s) { return +s.killip >= 2; } }),
+    priorVasc: B('Prior vascular disease (PAD or stroke)', { local: 1, auto: function (s) { return !!(s.pad || s.cevd); } }),
+    tnAssay: C('Troponin assay', [['elecsys', 'hs-cTnT Elecsys (Roche)'], ['architect', 'hs-cTnI Architect (Abbott)'], ['centaur', 'hs-cTnI Centaur (Siemens)'], ['access', 'hs-cTnI Access (Beckman Coulter)'],
+      ['clarity', 'hs-cTnI Clarity (Singulex)'], ['vitros', 'hs-cTnI Vitros (Ortho)'], ['pathfast', 'hs-cTnI Pathfast (LSI Medience)'], ['triage', 'hs-cTnI TriageTrue (Quidel)'], ['dimension', 'hs-cTnI Dimension EXL (Siemens)']], { local: 1, def: 'elecsys' }),
+    tn0: N('Troponin at 0 h', 'ng/L', { local: 1, min: 0, max: 100000 }),
+    tn1: N('Troponin at 1 h', 'ng/L', { local: 1, min: 0, max: 100000 }),
+    onset3h: B('Chest pain onset more than 3 h ago', { local: 1 }),
+    pdBleed: B('Prior spontaneous bleeding', { local: 1, auto: function (s) { return !!s.priorBleed; } }),
+    arcOAC: B('Long-term oral anticoagulation', { local: 1, auto: function (s) { return !!s.anticoag; } }),
+    arcBleedMaj: B('Spontaneous bleeding needing hospitalisation or transfusion in past 6 months, or recurrent', { local: 1 }),
+    arcDiath: B('Chronic bleeding diathesis', { local: 1 }),
+    arcCirr: B('Liver cirrhosis with portal hypertension', { local: 1 }),
+    arcCancer: B('Active malignancy in past 12 months (not non-melanoma skin)', { local: 1 }),
+    arcICH: B('Spontaneous ICH ever, traumatic ICH in past 12 months, or brain AVM', { local: 1 }),
+    arcStrokeMaj: B('Moderate or severe ischaemic stroke in past 6 months', { local: 1 }),
+    arcSurg: B('Non-deferrable major surgery on DAPT, or major surgery or trauma in past 30 days', { local: 1 }),
+    arcBleedMin: B('Minor: bleeding needing hospitalisation or transfusion 6–12 months ago', { local: 1 }),
+    arcNsaid: B('Minor: long-term NSAIDs or steroids', { local: 1, auto: function (s) { return !!s.nsaid; } }),
+    arcStrokeMin: B('Minor: any other ischaemic stroke', { local: 1 }),
+    mHypo: B('Hypotension (SBP < 80 for ≥ 1 h needing inotropes or IABP)', { local: 1 }),
+    mIABP: B('Intra-aortic balloon pump', { local: 1 }),
+    mCHF: B('Heart failure NYHA III–IV or pulmonary oedema', { local: 1 }),
+    contrast: N('Contrast volume', 'mL', { local: 1, min: 0, max: 1500, step: 10 }),
+    euDial: B('On dialysis', { local: 1 }),
+    euArt: B('Extracardiac arteriopathy', { local: 1, auto: function (s) { return !!s.pad; } }),
+    euMob: B('Poor mobility', { local: 1 }),
+    euPrev: B('Previous cardiac surgery', { local: 1 }),
+    euLung: B('Chronic lung disease', { local: 1 }),
+    euEndo: B('Active endocarditis', { local: 1 }),
+    euCrit: B('Critical pre-operative state', { local: 1 }),
+    euIDDM: B('Diabetes on insulin', { local: 1, auto: function (s) { return !!(s.dm && s.insulin); } }),
+    euCCS4: B('CCS class 4 angina', { local: 1 }),
+    euMI: B('MI within 90 days', { local: 1 }),
+    euAorta: B('Surgery on thoracic aorta', { local: 1 }),
+    euNyha: C('NYHA class', [['1', 'I'], ['2', 'II'], ['3', 'III'], ['4', 'IV']], { local: 1, def: '1' }),
+    euLV: C('LV function', [['good', 'Good (> 50%)'], ['mod', 'Moderate (31–50%)'], ['poor', 'Poor (21–30%)'], ['vpoor', 'Very poor (≤ 20%)']], { local: 1, autoDef: function (s) { return s.ef == null ? 'good' : s.ef > 50 ? 'good' : s.ef > 30 ? 'mod' : s.ef > 20 ? 'poor' : 'vpoor'; } }),
+    euPH: C('PA systolic pressure', [['none', '< 31 mmHg'], ['mod', '31–55 mmHg'], ['sev', '> 55 mmHg']], { local: 1, def: 'none' }),
+    euUrg: C('Urgency', [['elective', 'Elective'], ['urgent', 'Urgent'], ['emergency', 'Emergency'], ['salvage', 'Salvage']], { local: 1, def: 'elective' }),
+    euWt: C('Weight of procedure', [['cabg', 'Isolated CABG'], ['single', 'Single non-CABG'], ['two', '2 procedures'], ['three', '3 or more']], { local: 1, def: 'cabg' }),
     convVal: N('Value', '', { local: 1, nosi: 1 }),
     convAn: C('Test', [['chol', 'Cholesterol'], ['tg', 'Triglycerides'], ['cr', 'Creatinine'], ['glu', 'Glucose'], ['hb', 'Haemoglobin']], { local: 1, def: 'chol' }),
     convDir: C('Convert', [['toSI', 'Conventional → SI'], ['toConv', 'SI → conventional']], { local: 1, def: 'toSI' })
   };
 
   var GROUPS = [
-    ['demo', 'Patient'], ['vit', 'Vital signs'], ['lip', 'Lipids'], ['ren', 'Kidney and labs'],
+    ['demo', 'Patient'], ['vit', 'Vital signs'], ['lip', 'Lipids'], ['ren', 'Kidney and labs'], ['bld', 'Blood count'],
     ['rf', 'Risk factors'], ['hx', 'Cardiac and vascular history'], ['rx', 'Current medicines'], ['acs', 'Acute coronary presentation']
   ];
 
@@ -680,6 +803,8 @@ var DEF = (function () {
     d.map = UT.map(p.sbp, p.dbp);
     d.pp = (p.sbp && p.dbp) ? p.sbp - p.dbp : null;
     d.ascvd = !!(p.cad || p.cevd || p.pad || p.aaa);
+    d.hctEst = p.hct == null && p.hb != null;
+    d.hct = p.hct != null ? p.hct : (p.hb != null ? p.hb * 3 : null);
     return d;
   }
 
@@ -908,6 +1033,67 @@ var DEF = (function () {
     status: 'ported'
   });
 
+  /* ----- Phase 2: ACS ----- */
+  add({
+    id: 'heart', name: 'HEART', domain: 'ACS', scen: ['acs'],
+    blurb: '6-week MACE risk in chest pain. Age and risk factors come from the profile.',
+    inputs: ['age', 'htn', 'lipid', 'dm', 'smoker', 'famhx', 'wt', 'ht', 'cad', 'cevd', 'pad'], local: ['heartHx', 'heartEcg', 'heartTn'],
+    calc: function (p, d) {
+      var m = need(p, ['age', 'heartHx', 'heartEcg', 'heartTn']);
+      if (m.length) return res({ missing: m });
+      var n = (p.htn ? 1 : 0) + (p.lipid ? 1 : 0) + (p.dm ? 1 : 0) + (p.smoker ? 1 : 0) + (p.famhx ? 1 : 0) + (d.bmi > 30 ? 1 : 0);
+      var athero = !!(p.cad || p.cevd || p.pad);
+      var rf = athero || n >= 3 ? 2 : n >= 1 ? 1 : 0, ag = p.age >= 65 ? 2 : p.age >= 45 ? 1 : 0;
+      var s = +p.heartHx + +p.heartEcg + ag + rf + +p.heartTn, c = s <= 3 ? 0 : s <= 6 ? 1 : 3;
+      return res({ value: s, unit: '/ 10', cat: c, catLabel: ['Low', 'Moderate', '', 'High'][c],
+        lines: ['6-week MACE ' + ['0.9–1.7%', '12–16.6%', '', '50–65%'][c],
+          'History ' + p.heartHx + ' · ECG ' + p.heartEcg + ' · age ' + ag + ' · risk factors ' + rf + ' (' + (athero ? 'known atherosclerotic disease' : n + ' counted') + ') · troponin ' + p.heartTn],
+        action: c === 0 ? 'Low risk: early discharge can be considered.' : c === 1 ? 'Moderate risk: admit for observation and further testing.' : 'High risk: early invasive strategy.',
+        summary: 'HEART ' + s + '/10 (' + ['low', 'moderate', '', 'high'][c] + ' risk)' });
+    },
+    source: 'Six et al., Neth Heart J 2008; Backus et al., Int J Cardiol 2013. Risk factors: hypertension, hypercholesterolaemia, diabetes, obesity (BMI > 30), smoking, family history.',
+    status: 'new'
+  });
+
+  add({
+    id: 'crusade', name: 'CRUSADE', domain: 'ACS', scen: ['acs', 'pci'],
+    blurb: 'In-hospital major bleeding risk in NSTEMI.',
+    inputs: ['hct', 'hb', 'cr', 'age', 'sex', 'wt', 'hr', 'sbp', 'dm', 'killip', 'pad', 'cevd'], local: ['chfSigns', 'priorVasc'],
+    calc: function (p, d) {
+      var m = need(p, ['sex', 'hr', 'sbp']);
+      if (d.hct == null) m.push('hct');
+      if (d.crcl == null) ['cr', 'age', 'wt'].forEach(function (k) { if (p[k] == null) m.push(k); });
+      if (m.length) return res({ missing: m });
+      var r = UT.crusade({ hct: d.hct, crcl: d.crcl, hr: p.hr, sex: p.sex, chf: p.chfSigns, vasc: p.priorVasc, dm: p.dm, sbp: p.sbp }), b = r.parts;
+      return res({ value: r.score, unit: '/ 100', cat: [0, 0, 1, 2, 3][r.grade], catLabel: r.label,
+        lines: ['In-hospital major bleeding ≈ ' + r.rate + '%', 'Hct ' + b.hct + ' · CrCl ' + b.crcl + ' · HR ' + b.hr + ' · sex ' + b.sex + ' · HF signs ' + b.chf + ' · vascular ' + b.vasc + ' · diabetes ' + b.dm + ' · SBP ' + b.sbp],
+        warn: d.hctEst ? ['Haematocrit estimated as 3 × haemoglobin (' + f1(d.hct) + '%).'] : [],
+        summary: 'CRUSADE ' + r.score + ' (' + r.label.toLowerCase() + ' bleeding risk, ' + r.rate + '%)' });
+    },
+    source: 'Subherwal et al., Circulation 2009.',
+    status: 'verified', verifiedBy: 'MDCalc CRUSADE (13 patients covering every band)', checked: '2026-11-09'
+  });
+
+  add({
+    id: 'tn01', name: 'ESC 0/1-h troponin', domain: 'ACS', scen: ['acs'],
+    blurb: 'Rule-out, observe or rule-in NSTEMI with assay-specific hs-troponin cut-offs.',
+    inputs: [], local: ['tnAssay', 'tn0', 'tn1', 'onset3h'],
+    calc: function (p) {
+      if (p.tn0 == null) return res({ missing: ['tn0'] });
+      var r = UT.tn01({ assay: p.tnAssay, t0: p.tn0, t1: p.tn1, onset3h: p.onset3h }), c = r.cut;
+      var cuts = 'Cut-offs (ng/L): very low < ' + c[0] + ' · low < ' + c[1] + ' · no 1-h Δ < ' + c[2] + ' · high ≥ ' + c[3] + ' · 1-h Δ ≥ ' + c[4];
+      if (!r.out) return res({ missing: ['tn1'], hint: r.why });
+      var L = { out: ['Rule-out', 0, 'NSTEMI very unlikely. Consider discharge and outpatient work-up if the clinical picture and ECG agree.'],
+        observe: ['Observe', 1, 'Repeat troponin at 3 h and do echocardiography; decide on further testing by clinical picture.'],
+        'in': ['Rule-in', 3, 'NSTEMI likely: admit and plan invasive coronary angiography.'] }[r.out];
+      return res({ value: L[0], text: true, cat: L[1], catLabel: r.assay.split(' (')[0], lines: [r.why, cuts], action: L[2],
+        warn: ['Use only with the ECG and full clinical assessment. Cut-offs apply regardless of age, sex and renal function.'],
+        summary: 'ESC 0/1-h troponin: ' + L[0].toLowerCase() + ' (' + p.tn0 + (p.tn1 != null ? ' → ' + p.tn1 : '') + ' ng/L, ' + r.assay.split(' (')[0] + ')' });
+    },
+    source: 'Collet et al., 2020 ESC NSTE-ACS guidelines (supplementary table of assay cut-offs); Byrne et al., 2023 ESC ACS guidelines.',
+    status: 'new'
+  });
+
   /* ===== Pre-operative ===== */
   add({
     id: 'rcri', name: 'RCRI', domain: 'Pre-operative', scen: ['preop'],
@@ -1019,9 +1205,119 @@ var DEF = (function () {
     status: 'new', review: 1
   });
 
+  /* ----- Phase 2: intervention and cardiac surgery ----- */
+  add({
+    id: 'precise', name: 'PRECISE-DAPT', domain: 'Intervention and surgery', scen: ['pci', 'acs'],
+    blurb: 'Out-of-hospital bleeding risk on DAPT after PCI; guides DAPT duration.',
+    inputs: ['age', 'hb', 'wbc', 'cr', 'sex', 'wt', 'priorBleed'], local: ['pdBleed'],
+    calc: function (p, d) {
+      var m = need(p, ['age', 'hb', 'wbc']);
+      if (d.crcl == null) ['cr', 'sex', 'wt'].forEach(function (k) { if (p[k] == null) m.push(k); });
+      if (m.length) return res({ missing: m });
+      var r = UT.precise({ age: p.age, hb: p.hb, wbc: p.wbc, crcl: d.crcl, bleed: p.pdBleed });
+      return res({ value: r.score, unit: 'points', cat: r.grade, catLabel: r.label,
+        lines: ['CrCl ' + f0(d.crcl) + ' mL/min (Cockcroft-Gault)', 'Bands: ≤ 10 very low · 11–17 low · 18–24 moderate · ≥ 25 high'],
+        action: r.score >= 25 ? 'Score ≥ 25: high bleeding risk. Short DAPT (3–6 months) should be considered (ESC).' : 'Score < 25: standard or long DAPT (12–24 months) can be considered (ESC).',
+        summary: 'PRECISE-DAPT ' + r.score + ' (' + r.label.toLowerCase() + ' bleeding risk)' });
+    },
+    source: 'Costa et al., Lancet 2017. The model is not published as a formula; the app reproduces the MDCalc calculator.',
+    status: 'verified', verifiedBy: 'MDCalc PRECISE-DAPT (each input probed across its range, plus mixed patients)', checked: '2026-11-09'
+  });
+
+  add({
+    id: 'archbr', name: 'ARC-HBR', domain: 'Intervention and surgery', scen: ['pci'],
+    blurb: 'High bleeding risk at PCI: 1 major or 2 minor criteria. Lab and age criteria come from the profile.',
+    inputs: ['age', 'sex', 'cr', 'hb', 'plt', 'anticoag', 'nsaid'],
+    local: ['arcOAC', 'arcBleedMaj', 'arcDiath', 'arcCirr', 'arcCancer', 'arcICH', 'arcStrokeMaj', 'arcSurg', 'arcBleedMin', 'arcNsaid', 'arcStrokeMin'],
+    calc: function (p, d) {
+      var maj = [], min = [], unk = [];
+      if (p.arcOAC) maj.push('long-term OAC');
+      if (d.egfr != null) { if (d.egfr < 30) maj.push('eGFR < 30'); else if (d.egfr < 60) min.push('eGFR 30–59'); } else unk.push('eGFR');
+      if (p.hb != null) { if (p.hb < 11) maj.push('Hb < 11 g/dL'); else if (p.hb < (p.sex === 'female' ? 12 : 13)) min.push('Hb ' + (p.sex === 'female' ? '11–11.9' : '11–12.9') + ' g/dL'); } else unk.push('haemoglobin');
+      if (p.plt != null) { if (p.plt < 100) maj.push('platelets < 100'); } else unk.push('platelets');
+      if (p.age != null) { if (p.age >= 75) min.push('age ≥ 75'); } else unk.push('age');
+      [['arcBleedMaj', 'recent or recurrent bleeding'], ['arcDiath', 'bleeding diathesis'], ['arcCirr', 'cirrhosis with portal hypertension'], ['arcCancer', 'active malignancy'],
+        ['arcICH', 'ICH or brain AVM'], ['arcStrokeMaj', 'recent moderate–severe stroke'], ['arcSurg', 'major surgery or trauma']].forEach(function (x) { if (p[x[0]]) maj.push(x[1]); });
+      [['arcBleedMin', 'bleeding 6–12 months ago'], ['arcNsaid', 'NSAIDs or steroids'], ['arcStrokeMin', 'prior ischaemic stroke']].forEach(function (x) { if (p[x[0]]) min.push(x[1]); });
+      var hbr = maj.length >= 1 || min.length >= 2;
+      return res({ value: hbr ? 'High bleeding risk' : 'Not HBR', text: true, cat: hbr ? 3 : 0, catLabel: maj.length + ' major · ' + min.length + ' minor',
+        lines: [maj.length ? 'Major: ' + maj.join(', ') : 'No major criteria', min.length ? 'Minor: ' + min.join(', ') : 'No minor criteria'],
+        warn: unk.length ? ['Not entered, so not assessed: ' + unk.join(', ') + '.'] : [],
+        action: hbr ? 'HBR (≥ 4% BARC 3–5 bleeding or ≥ 1% ICH at 1 year): consider short DAPT and bleeding-avoidance strategies.' : 'Does not meet ARC-HBR on the criteria entered.',
+        summary: 'ARC-HBR: ' + (hbr ? 'high bleeding risk' : 'not HBR') + ' (' + maj.length + ' major, ' + min.length + ' minor)' });
+    },
+    source: 'Urban et al., Eur Heart J / Circulation 2019 (Academic Research Consortium for High Bleeding Risk).',
+    status: 'new'
+  });
+
+  add({
+    id: 'mehran', name: 'Mehran contrast nephropathy', domain: 'Intervention and surgery', scen: ['pci'],
+    blurb: 'Risk of contrast-induced nephropathy and dialysis after PCI.',
+    inputs: ['age', 'sex', 'dm', 'cr', 'hct', 'hb'], local: ['contrast', 'mHypo', 'mIABP', 'mCHF'],
+    calc: function (p, d) {
+      var m = need(p, ['age', 'sex', 'cr']);
+      if (m.length) return res({ missing: m });
+      var an = d.hct != null ? d.hct < (p.sex === 'female' ? 36 : 39) : null;
+      var r = UT.mehran({ hypo: p.mHypo, iabp: p.mIABP, chf: p.mCHF, age: p.age, anaemia: !!an, dm: p.dm, contrast: p.contrast, egfr: d.egfr });
+      var w = [];
+      if (an == null) w.push('Haematocrit or haemoglobin not entered: anaemia (3 points) not assessed.');
+      else if (d.hctEst) w.push('Anaemia judged from haematocrit estimated as 3 × haemoglobin.');
+      if (p.contrast == null) w.push('Contrast volume not entered: each 100 mL adds 1 point.');
+      return res({ value: r.score, unit: 'points', cat: r.grade, catLabel: r.label,
+        lines: ['Contrast nephropathy ' + r.cin + '% · dialysis ' + r.dialysis + '%', 'eGFR ' + f0(d.egfr) + (an ? ' · anaemia' : '') + (p.contrast != null ? ' · contrast ' + f0(p.contrast) + ' mL' : '')],
+        warn: w, action: r.grade >= 1 ? 'Hydrate, minimise contrast, hold nephrotoxic drugs and recheck creatinine at 48–72 h.' : 'Low risk; standard hydration.',
+        summary: 'Mehran ' + r.score + ' (CIN risk ' + r.cin + '%, dialysis ' + r.dialysis + '%)' });
+    },
+    source: 'Mehran et al., J Am Coll Cardiol 2004 (eGFR version).',
+    status: 'new'
+  });
+
+  add({
+    id: 'contrastmax', name: 'Contrast limit', domain: 'Intervention and surgery', scen: ['pci'],
+    blurb: 'Maximum contrast volume from weight and kidney function.',
+    inputs: ['wt', 'cr', 'age', 'sex'], local: ['contrast'],
+    calc: function (p, d) {
+      var m = need(p, ['wt', 'cr']);
+      if (m.length) return res({ missing: m });
+      var macd = Math.min(300, 5 * p.wt / p.cr), L = ['Cigarroa limit: 5 mL × kg ÷ creatinine (mg/dL), capped at 300 mL'], w = [], cat = null;
+      if (d.crcl != null) L.push('Volume-to-CrCl ratio: keep below ' + f0(2 * d.crcl) + ' mL (2 × CrCl); risk rises sharply above ' + f0(3 * d.crcl) + ' mL (3 × CrCl)');
+      if (p.contrast != null) {
+        cat = p.contrast > macd || (d.crcl != null && p.contrast > 3 * d.crcl) ? 3 : d.crcl != null && p.contrast > 2 * d.crcl ? 1 : 0;
+        L.push('Planned or given: ' + f0(p.contrast) + ' mL' + (d.crcl != null ? ' (ratio ' + (p.contrast / d.crcl).toFixed(1) + ')' : ''));
+        if (p.contrast > macd) w.push('Above the Cigarroa limit.');
+      }
+      return res({ value: macd, dp: 0, unit: 'mL maximum', cat: cat, catLabel: cat == null ? '' : ['Within limits', 'Above 2 × CrCl', '', 'Above limit'][cat], lines: L, warn: w,
+        summary: 'Contrast limit ' + f0(macd) + ' mL' + (p.contrast != null ? ' (given ' + f0(p.contrast) + ' mL)' : '') });
+    },
+    source: 'Cigarroa et al., Am J Med 1989; Gurm et al., J Am Coll Cardiol 2011 (volume-to-creatinine-clearance ratio).',
+    status: 'new'
+  });
+
+  add({
+    id: 'euroscore2', name: 'EuroSCORE II', domain: 'Intervention and surgery', scen: ['surg'],
+    blurb: 'Predicted in-hospital mortality after cardiac surgery.',
+    inputs: ['age', 'sex', 'cr', 'wt', 'ef', 'dm', 'insulin', 'pad'],
+    local: ['euWt', 'euUrg', 'euNyha', 'euLV', 'euPH', 'euDial', 'euIDDM', 'euArt', 'euMob', 'euPrev', 'euLung', 'euEndo', 'euCrit', 'euCCS4', 'euMI', 'euAorta'],
+    calc: function (p, d) {
+      var m = need(p, ['age', 'sex']);
+      if (!p.euDial && d.crcl == null) ['cr', 'wt'].forEach(function (k) { if (p[k] == null) m.push(k); });
+      if (m.length) return res({ missing: m });
+      var v = UT.euroscore({ age: p.age, sex: p.sex, dialysis: p.euDial, crcl: d.crcl, art: p.euArt, mob: p.euMob, prev: p.euPrev, lung: p.euLung, endo: p.euEndo, crit: p.euCrit,
+        iddm: p.euIDDM, nyha: p.euNyha, ccs4: p.euCCS4, lv: p.euLV, mi: p.euMI, ph: p.euPH, urg: p.euUrg, weight: p.euWt, aorta: p.euAorta });
+      var c = v < 2 ? 0 : v < 5 ? 1 : v < 10 ? 2 : 3;
+      return res({ value: v, unit: '%', dp: 2, cat: c, catLabel: ['Low', 'Intermediate', 'High', 'Very high'][c],
+        lines: [(p.euDial ? 'On dialysis' : 'CrCl ' + f0(d.crcl) + ' mL/min') + ' · LV ' + { good: 'good', mod: 'moderate', poor: 'poor', vpoor: 'very poor' }[p.euLV] + (p.ef != null ? ' (EF ' + f0(p.ef) + '%)' : ''),
+          'Bands used here: < 2% low · 2–5% intermediate · 5–10% high · > 10% very high (not part of the model)'],
+        warn: p.age < 18 ? ['Model is for adults.'] : [],
+        summary: 'EuroSCORE II ' + v.toFixed(2) + '%' });
+    },
+    source: 'Nashef et al., Eur J Cardiothorac Surg 2012.',
+    status: 'verified', verifiedBy: 'MDCalc EuroSCORE II (4 patients exercising every coefficient)', checked: '2026-11-09'
+  });
+
   /* ===== Utilities ===== */
   add({
-    id: 'kidney', name: 'Kidney function', domain: 'Utilities', scen: ['prev', 'af', 'acs', 'preop'],
+    id: 'kidney', name: 'Kidney function', domain: 'Utilities', scen: ['prev', 'af', 'acs', 'pci', 'surg', 'preop'],
     blurb: 'eGFR (CKD-EPI 2021, race-free) and creatinine clearance (Cockcroft-Gault).',
     inputs: ['cr', 'age', 'sex', 'wt'],
     calc: function (p, d) {
@@ -1102,7 +1398,7 @@ var DEF = (function () {
   });
 
   var SCEN = [
-    ['all', 'All scores'], ['fav', 'Favourites'], ['prev', 'Prevention visit'], ['af', 'New AF'], ['acs', 'ACS admission'], ['preop', 'Pre-op']
+    ['all', 'All scores'], ['fav', 'Favourites'], ['prev', 'Prevention visit'], ['af', 'New AF'], ['acs', 'ACS admission'], ['pci', 'PCI / cath lab'], ['surg', 'Cardiac surgery'], ['preop', 'Pre-op']
   ];
 
   function compute(state) {
@@ -1118,7 +1414,7 @@ var DEF = (function () {
 /* ===== UI: one shared patient state, one renderer for every score ===== */
 (function () {
   var F = DEF.F, $ = function (s, r) { return (r || document).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
-  var EXAMPLE = { age: '62', sex: 'male', wt: '84', ht: '172', sbp: '148', dbp: '88', hr: '78', tc: '232', hdl: '41', tg: '178', cr: '1.1',
+  var EXAMPLE = { age: '62', sex: 'male', wt: '84', ht: '172', sbp: '148', dbp: '88', hr: '78', tc: '232', hdl: '41', tg: '178', cr: '1.1', hb: '13.8', hct: '41', wbc: '7.2', plt: '240',
     smoker: true, htn: true, bptx: true, famhx: true };
   var S = {}, isExample = true, units = 'conv', view = 'scores', scen = 'all', q = '', favs = [], last = null;
   function store(k, v) { try { localStorage.setItem('cs.' + k, JSON.stringify(v)); } catch (e) { } }
@@ -1153,7 +1449,7 @@ var DEF = (function () {
   }
 
   /* ---------- profile ---------- */
-  var openGroups = load('open', { demo: 1, vit: 1, lip: 1, ren: 1, rf: 1, hx: 1, rx: 0, acs: 0 });
+  var openGroups = load('open', { demo: 1, vit: 1, lip: 1, ren: 1, bld: 0, rf: 1, hx: 1, rx: 0, acs: 0 });
   function renderProfile() {
     var h = isExample ? '<div class="example"><span>Showing an <b>example patient</b>. Edit any value or start a new patient.</span><button type="button" class="btn ghost" data-act="new">New patient</button></div>' : '';
     DEF.GROUPS.forEach(function (g) {
@@ -1304,7 +1600,8 @@ var DEF = (function () {
   document.addEventListener('change', function (e) {
     var sk = e.target.getAttribute && e.target.getAttribute('data-sel');
     if (sk) { S[sk] = e.target.value; leaveExample(); refreshForms(); return; }
-    if (e.target.getAttribute && e.target.getAttribute('data-k')) { var a = document.activeElement; if (!a || !a.closest || !a.closest('.ins')) { renderIns(); } }
+    // Deferred: 'change' fires while focus is still moving, and re-rendering then would destroy the field being clicked into.
+    if (e.target.getAttribute && e.target.getAttribute('data-k')) setTimeout(function () { var a = document.activeElement; if (!a || !a.closest || !a.closest('.ins')) renderIns(); }, 0);
   });
   document.addEventListener('focusout', function (e) {
     if (e.target.closest && e.target.closest('.ins') && e.target.getAttribute('data-k')) setTimeout(function () { var a = document.activeElement; if (!a || !a.closest || !a.closest('.ins')) renderIns(); }, 0);

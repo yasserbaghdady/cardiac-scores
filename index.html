@@ -84,6 +84,8 @@ body:not([data-view="summary"]) #summary{display:none}
 .f .box{display:flex;align-items:center;background:var(--field);border:1px solid var(--line);border-radius:6px}
 .f select{flex:1;min-width:0;background:transparent;border:0;padding:7px 8px;font-size:14.5px;width:100%}
 .f.wide{grid-column:1/-1}
+.f input[type=number]{-moz-appearance:textfield}
+.f input::-webkit-outer-spin-button,.f input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .f input{background:transparent;border:0;padding:7px 8px;width:100%;min-width:0;font-size:15px;font-family:var(--f-num);font-variant-numeric:tabular-nums}
 .f .u{font-size:11.5px;color:var(--muted);padding-right:8px;white-space:nowrap}
 .f.need .box{border-color:var(--c2);box-shadow:0 0 0 2px var(--c2-bg)}
@@ -165,6 +167,7 @@ body:not([data-view="summary"]) #summary{display:none}
 .foot{font-size:12px;color:var(--muted);max-width:80ch}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
+.upd[hidden]{display:none}
 .upd{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 14px;background:var(--navy-2);color:#fff;border-top:3px solid var(--gold);font-size:14px;padding-block:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .upd .btn{background:var(--gold);color:var(--navy-2);font-weight:700}
 </style>
@@ -191,7 +194,7 @@ body:not([data-view="summary"]) #summary{display:none}
       <div class="vt" role="group" aria-label="View"><button type="button" data-view="scores" aria-pressed="true">Scores</button><button type="button" data-view="summary" aria-pressed="false">Summary</button></div>
     </div>
     <div id="cards"></div>
-    <p class="foot">Results support, and do not replace, clinical judgement. Nothing you enter leaves this device. Build 2 · 09 Nov 2026</p>
+    <p class="foot">Results support, and do not replace, clinical judgement. Nothing you enter leaves this device. Build 2 · 24 Nov 2026</p>
   </section>
   <section id="summary" aria-label="Summary"></section>
 </main>
@@ -662,7 +665,23 @@ var DEF = (function () {
     aaa: B('Aortic aneurysm', { g: 'hx' }),
     hf: B('Heart failure / LV dysfunction', { g: 'hx' }),
     priorBleed: B('Prior major bleeding', { g: 'hx' }),
-    ef: N('LV ejection fraction', '%', { g: 'hx', min: 5, max: 85, step: 1 }),
+    af: B('Atrial fibrillation', { g: 'hx' }),
+
+    ef: N('LV ejection fraction', '%', { g: 'ech', min: 5, max: 85, step: 1 }),
+    eePrime: N('E/e′ (average)', '', { g: 'ech', min: 2, max: 50 }),
+    ePrimeSept: N('e′ septal', 'cm/s', { g: 'ech', min: 1, max: 25 }),
+    ePrimeLat: N('e′ lateral', 'cm/s', { g: 'ech', min: 1, max: 30 }),
+    lavi: N('LA volume index', 'mL/m²', { g: 'ech', min: 5, max: 150 }),
+    trv: N('TR velocity', 'm/s', { g: 'ech', min: 1, max: 6 }),
+    pasp: N('PA systolic pressure', 'mmHg', { g: 'ech', min: 10, max: 150, step: 1 }),
+    lvmi: N('LV mass index', 'g/m²', { g: 'ech', min: 30, max: 350, step: 1 }),
+    rwt: N('Relative wall thickness', '', { g: 'ech', min: 0.1, max: 1.2 }),
+    wallThick: N('Max wall thickness', 'mm', { g: 'ech', min: 4, max: 40 }),
+    gls: N('GLS (absolute)', '%', { g: 'ech', min: 2, max: 30 }),
+
+    ntprobnp: N('NT-proBNP', 'pg/mL', { g: 'ren', min: 5, max: 70000, step: 1 }),
+    bnp: N('BNP', 'pg/mL', { g: 'ren', min: 2, max: 20000, step: 1 }),
+
 
     bptx: B('BP treatment', { g: 'rx' }),
     statin: B('Statin', { g: 'rx' }),
@@ -774,6 +793,8 @@ var DEF = (function () {
     euPH: C('PA systolic pressure', [['none', '< 31 mmHg'], ['mod', '31–55 mmHg'], ['sev', '> 55 mmHg']], { local: 1, def: 'none' }),
     euUrg: C('Urgency', [['elective', 'Elective'], ['urgent', 'Urgent'], ['emergency', 'Emergency'], ['salvage', 'Salvage']], { local: 1, def: 'elective' }),
     euWt: C('Weight of procedure', [['cabg', 'Isolated CABG'], ['single', 'Single non-CABG'], ['two', '2 procedures'], ['three', '3 or more']], { local: 1, def: 'cabg' }),
+    qt: N('QT interval', 'ms', { local: 1, min: 200, max: 800, step: 1 }),
+    twoAntiHTN: B('On 2 or more antihypertensive medicines', { local: 1 }),
     convVal: N('Value', '', { local: 1, nosi: 1 }),
     convAn: C('Test', [['chol', 'Cholesterol'], ['tg', 'Triglycerides'], ['cr', 'Creatinine'], ['glu', 'Glucose'], ['hb', 'Haemoglobin']], { local: 1, def: 'chol' }),
     convDir: C('Convert', [['toSI', 'Conventional → SI'], ['toConv', 'SI → conventional']], { local: 1, def: 'toSI' })
@@ -781,7 +802,7 @@ var DEF = (function () {
 
   var GROUPS = [
     ['demo', 'Patient'], ['vit', 'Vital signs'], ['lip', 'Lipids'], ['ren', 'Kidney and labs'], ['bld', 'Blood count'],
-    ['rf', 'Risk factors'], ['hx', 'Cardiac and vascular history'], ['rx', 'Current medicines'], ['acs', 'Acute coronary presentation']
+    ['rf', 'Risk factors'], ['hx', 'Cardiac and vascular history'], ['ech', 'Echocardiogram'], ['rx', 'Current medicines'], ['acs', 'Acute coronary presentation']
   ];
 
   /* ---------- value access ---------- */
@@ -807,6 +828,9 @@ var DEF = (function () {
     d.map = UT.map(p.sbp, p.dbp);
     d.pp = (p.sbp && p.dbp) ? p.sbp - p.dbp : null;
     d.ascvd = !!(p.cad || p.cevd || p.pad || p.aaa);
+    d.paspEst = p.pasp == null && p.trv != null;
+    d.pasp = p.pasp != null ? p.pasp : (p.trv != null ? 4 * p.trv * p.trv + 5 : null);
+    d.trv = p.trv != null ? p.trv : (p.pasp != null && p.pasp > 5 ? Math.sqrt((p.pasp - 5) / 4) : null);
     d.hctEst = p.hct == null && p.hb != null;
     d.hct = p.hct != null ? p.hct : (p.hb != null ? p.hb * 3 : null);
     return d;
@@ -1319,6 +1343,103 @@ var DEF = (function () {
     status: 'verified', verifiedBy: 'MDCalc EuroSCORE II (4 patients exercising every coefficient)', checked: '2026-11-09'
   });
 
+  /* ===== Heart failure ===== */
+  add({
+    id: 'h2fpef', name: 'H₂FPEF', domain: 'Heart failure', scen: ['hf'],
+    blurb: 'Probability that unexplained dyspnoea with preserved EF is HFpEF.',
+    inputs: ['age', 'wt', 'ht', 'eePrime', 'pasp', 'trv', 'af'], local: ['twoAntiHTN'],
+    calc: function (p, d) {
+      var m = need(p, ['age']);
+      if (d.bmi == null) ['wt', 'ht'].forEach(function (k) { if (p[k] == null) m.push(k); });
+      if (p.eePrime == null) m.push('eePrime');
+      if (d.pasp == null) m.push('pasp');
+      if (m.length) return res({ missing: m });
+      var y = -9.1917 + 0.0451 * p.age + 0.1307 * d.bmi + 0.0859 * p.eePrime + 0.0520 * d.pasp + 1.6997 * (p.af ? 1 : 0);
+      var prob = 100 * Math.exp(y) / (1 + Math.exp(y));
+      var pts = (d.bmi > 30 ? 2 : 0) + (p.twoAntiHTN ? 1 : 0) + (p.af ? 3 : 0) + (d.pasp > 35 ? 1 : 0) + (p.age > 60 ? 1 : 0) + (p.eePrime > 9 ? 1 : 0);
+      var c = prob < 25 ? 0 : prob < 75 ? 1 : 3;
+      var L = ['Points score ' + pts + '/9: ' + (pts <= 1 ? 'HFpEF can be discounted' : pts >= 6 ? 'HFpEF can be diagnosed' : 'intermediate, consider further testing'),
+        'BMI ' + f1(d.bmi) + ' · E/e′ ' + f1(p.eePrime) + ' · PASP ' + f0(d.pasp) + (p.af ? ' · AF' : '') + (p.age > 60 ? ' · age > 60' : '')];
+      if (d.paspEst) L.push('PASP estimated from TR velocity ' + f1(p.trv) + ' m/s assuming RA pressure 5 mmHg.');
+      return res({ value: prob, unit: '%', cat: c, catLabel: prob < 25 ? 'Low' : prob < 75 ? 'Intermediate' : 'High', lines: L,
+        action: prob < 25 ? 'HFpEF unlikely: look for other causes of dyspnoea.' : prob >= 75 ? 'HFpEF likely: treat as HFpEF without further testing.' : 'Intermediate: diastolic stress echo or invasive haemodynamics if the diagnosis matters.',
+        warn: p.ef != null && p.ef < 50 ? ['EF ' + f0(p.ef) + '%: the score is for preserved EF (≥ 50%).'] : [],
+        summary: 'H₂FPEF ' + f0(prob) + '% probability of HFpEF (points ' + pts + '/9)' });
+    },
+    source: 'Reddy et al., Circulation 2018. The percentage is the published continuous model; the 0–9 points score is shown alongside it.',
+    status: 'verified', verifiedBy: 'MDCalc H2FPEF (9 patients, exact)', checked: '2026-11-24'
+  });
+
+  add({
+    id: 'hfapeff', name: 'HFA-PEFF', domain: 'Heart failure', scen: ['hf'],
+    blurb: 'ESC/HFA step 2 score: echo and natriuretic peptide evidence for HFpEF, 0–6 points.',
+    inputs: ['sex', 'af', 'eePrime', 'ePrimeSept', 'ePrimeLat', 'trv', 'pasp', 'lavi', 'lvmi', 'rwt', 'wallThick', 'gls', 'ntprobnp', 'bnp'],
+    calc: function (p, d) {
+      var af = !!p.af, got = function (k) { return p[k] != null; };
+      var F1 = [], F2 = [], M1 = [], M2 = [], B1 = [], B2 = [], unk = [];
+
+      if (p.ePrimeSept != null && p.ePrimeSept < 7) F1.push('e′ septal ' + f1(p.ePrimeSept));
+      if (p.ePrimeLat != null && p.ePrimeLat < 10) F1.push('e′ lateral ' + f1(p.ePrimeLat));
+      if (p.eePrime != null && p.eePrime >= 15) F1.push('E/e′ ' + f1(p.eePrime));
+      if (d.trv != null && d.trv > 2.8) F1.push('TR velocity ' + f1(d.trv) + ' m/s');
+      if (p.eePrime != null && p.eePrime >= 9 && p.eePrime < 15) F2.push('E/e′ ' + f1(p.eePrime));
+      if (p.gls != null && p.gls < 16) F2.push('GLS ' + f1(p.gls) + '%');
+      if (!got('ePrimeSept') && !got('ePrimeLat') && !got('eePrime') && !got('gls') && d.trv == null) unk.push('functional');
+
+      var laviMaj = af ? 40 : 34, laviMin = af ? 34 : 29, lvmiMaj = p.sex === 'female' ? 122 : 149, lvmiMin = p.sex === 'female' ? 95 : 115;
+      if (p.lavi != null && p.lavi > laviMaj) M1.push('LAVI ' + f1(p.lavi) + ' mL/m²');
+      if (p.lvmi != null && p.rwt != null && p.lvmi >= lvmiMaj && p.rwt > 0.42) M1.push('LV mass index ' + f0(p.lvmi) + ' with RWT ' + p.rwt.toFixed(2));
+      if (p.lavi != null && p.lavi > laviMin && p.lavi <= laviMaj) M2.push('LAVI ' + f1(p.lavi) + ' mL/m²');
+      if (p.lvmi != null && p.lvmi > lvmiMin) M2.push('LV mass index ' + f0(p.lvmi));
+      if (p.rwt != null && p.rwt > 0.42) M2.push('RWT ' + p.rwt.toFixed(2));
+      if (p.wallThick != null && p.wallThick >= 12) M2.push('wall thickness ' + f1(p.wallThick) + ' mm');
+      if (!got('lavi') && !got('lvmi') && !got('rwt') && !got('wallThick')) unk.push('morphological');
+
+      var np = af ? { nMaj: 660, nMin: 365, bMaj: 240, bMin: 105 } : { nMaj: 220, nMin: 125, bMaj: 80, bMin: 35 };
+      if (p.ntprobnp != null && p.ntprobnp > np.nMaj) B1.push('NT-proBNP ' + f0(p.ntprobnp));
+      if (p.bnp != null && p.bnp > np.bMaj) B1.push('BNP ' + f0(p.bnp));
+      if (p.ntprobnp != null && p.ntprobnp >= np.nMin && p.ntprobnp <= np.nMaj) B2.push('NT-proBNP ' + f0(p.ntprobnp));
+      if (p.bnp != null && p.bnp >= np.bMin && p.bnp <= np.bMaj) B2.push('BNP ' + f0(p.bnp));
+      if (!got('ntprobnp') && !got('bnp')) unk.push('biomarker');
+
+      if (unk.length === 3) return res({ missing: ['eePrime', 'lavi', 'ntprobnp'], hint: 'Enter echo measurements and a natriuretic peptide.' });
+      var fD = F1.length ? 2 : F2.length ? 1 : 0, mD = M1.length ? 2 : M2.length ? 1 : 0, bD = B1.length ? 2 : B2.length ? 1 : 0;
+      var s = fD + mD + bD, c = s >= 5 ? 3 : s >= 2 ? 1 : 0;
+      var dom = function (n, v, maj, min) { return n + ' ' + v + (v ? ' (' + (v === 2 ? maj : min).join(', ') + ')' : ''); };
+      return res({ value: s, unit: '/ 6', cat: c, catLabel: s >= 5 ? 'HFpEF diagnosed' : s >= 2 ? 'Intermediate' : 'Unlikely',
+        lines: [dom('Functional', fD, F1, F2), dom('Morphological', mD, M1, M2), dom('Biomarker', bD, B1, B2) + (af ? ' · AF thresholds used' : '')],
+        warn: unk.length ? ['Nothing entered for the ' + unk.join(' or ') + ' domain, so it scores 0 and the total is a minimum.'] : [],
+        action: s >= 5 ? 'Score ≥ 5: HFpEF confirmed; go on to step 3 (aetiology).' : s <= 1 ? 'Score ≤ 1: HFpEF very unlikely; look for other causes.' : 'Score 2–4: diastolic stress echo, or invasive haemodynamics, to settle the diagnosis.',
+        summary: 'HFA-PEFF ' + s + '/6 (' + (s >= 5 ? 'HFpEF diagnosed' : s >= 2 ? 'intermediate, needs stress testing' : 'HFpEF unlikely') + ')' });
+    },
+    source: 'Pieske et al., Eur Heart J 2019 (HFA-PEFF step 2). Each domain scores 2 for a major criterion or 1 for a minor one.',
+    status: 'new', review: 1
+  });
+
+  /* ===== Arrhythmia and ECG ===== */
+  add({
+    id: 'qtc', name: 'QTc', domain: 'Arrhythmia and ECG', scen: ['prev', 'af', 'acs', 'hf'],
+    blurb: 'Corrected QT by Bazett, Fridericia, Framingham and Hodges.',
+    inputs: ['hr', 'sex'], local: ['qt'],
+    calc: function (p) {
+      var m = need(p, ['qt', 'hr']);
+      if (m.length) return res({ missing: m });
+      var rr = 60 / p.hr, b = p.qt / Math.sqrt(rr), fr = p.qt / Math.pow(rr, 1 / 3), fm = p.qt + 154 * (1 - rr), ho = p.qt + 1.75 * (p.hr - 60);
+      var lim = p.sex === 'female' ? 460 : 450, c = b > 500 ? 3 : b > lim ? 2 : b < 340 ? 1 : 0;
+      var L = ['Fridericia ' + f0(fr) + ' · Framingham ' + f0(fm) + ' · Hodges ' + f0(ho) + ' ms', 'QT ' + f0(p.qt) + ' ms at ' + f0(p.hr) + ' bpm (RR ' + rr.toFixed(2) + ' s)'];
+      if (Math.abs(b - fr) > 20) L.push('At this heart rate Bazett and Fridericia differ by ' + f0(Math.abs(b - fr)) + ' ms; away from 60 bpm Fridericia is the more reliable of the two.');
+      if (!p.sex) L.push('Sex not entered: the 450 ms threshold for men is used.');
+      return res({ value: b, dp: 0, unit: 'ms (Bazett)', cat: c,
+        catLabel: c === 3 ? 'Markedly prolonged' : c === 2 ? 'Prolonged' : c === 1 ? 'Short' : 'Normal', lines: L,
+        action: c === 3 ? 'QTc > 500 ms: real risk of torsades. Review QT-prolonging drugs, and correct potassium and magnesium.' :
+          c === 2 ? 'Above ' + lim + ' ms for ' + (p.sex === 'female' ? 'women' : 'men') + ': review QT-prolonging drugs and electrolytes.' :
+            c === 1 ? 'QTc < 340 ms: consider short QT syndrome if there are symptoms or a family history.' : 'Within normal limits.',
+        summary: 'QTc ' + f0(b) + ' ms Bazett, ' + f0(fr) + ' ms Fridericia' + (c >= 2 ? ' (prolonged)' : '') });
+    },
+    source: 'Bazett 1920; Fridericia 1920; Sagie et al. (Framingham), Am J Cardiol 1992; Hodges 1983. Thresholds from the 2022 ESC ventricular arrhythmia guidelines.',
+    status: 'new'
+  });
+
   /* ===== Utilities ===== */
   add({
     id: 'kidney', name: 'Kidney function', domain: 'Utilities', scen: ['prev', 'af', 'acs', 'pci', 'surg', 'preop'],
@@ -1402,7 +1523,7 @@ var DEF = (function () {
   });
 
   var SCEN = [
-    ['all', 'All scores'], ['fav', 'Favourites'], ['prev', 'Prevention visit'], ['af', 'New AF'], ['acs', 'ACS admission'], ['pci', 'PCI / cath lab'], ['surg', 'Cardiac surgery'], ['preop', 'Pre-op']
+    ['all', 'All scores'], ['fav', 'Favourites'], ['prev', 'Prevention visit'], ['af', 'New AF'], ['acs', 'ACS admission'], ['hf', 'Heart failure'], ['pci', 'PCI / cath lab'], ['surg', 'Cardiac surgery'], ['preop', 'Pre-op']
   ];
 
   function compute(state) {

@@ -2,7 +2,7 @@
 (function () {
   var F = DEF.F, $ = function (s, r) { return (r || document).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var EXAMPLE = { age: '62', sex: 'male', wt: '84', ht: '172', sbp: '148', dbp: '88', hr: '78', tc: '232', hdl: '41', tg: '178', cr: '1.1', hb: '13.8', hct: '41', wbc: '7.2', plt: '240',
-    smoker: true, htn: true, bptx: true, famhx: true };
+    smoker: true, htn: true, bptx: true, famhx: true, cac: '120' };
   var S = {}, isExample = true, units = 'conv', view = 'scores', scen = 'all', q = '', favs = [], last = null;
   function store(k, v) { try { localStorage.setItem('cs.' + k, JSON.stringify(v)); } catch (e) { } }
   function load(k, d) { try { var v = localStorage.getItem('cs.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
@@ -67,7 +67,9 @@
     var t = q.trim().toLowerCase();
     return DEF.SCORES.filter(function (s) {
       if (scen === 'fav' && favs.indexOf(s.id) < 0) return false;
-      if (scen !== 'all' && scen !== 'fav' && s.scen.indexOf(scen) < 0) return false;
+      // A typed search looks across every score: hunting for "MESA" from the PCI
+      // tab should find it, not report that nothing matches.
+      if (!t && scen !== 'all' && scen !== 'fav' && s.scen.indexOf(scen) < 0) return false;
       if (t && (s.name + ' ' + s.blurb + ' ' + s.domain).toLowerCase().indexOf(t) < 0) return false;
       return true;
     });
@@ -155,7 +157,7 @@
   }
   function renderSummary() {
     var t = summaryText();
-    $('#summary').innerHTML = '<div class="colhead"><div class="note">' + (scen === 'all' ? 'All calculated scores' : 'Scores in “' + esc(DEF.SCEN.filter(function (c) { return c[0] === scen; })[0][1]) + '”') + '</div>' +
+    $('#summary').innerHTML = '<div class="colhead"><div class="note">' + (q.trim() ? 'All scores matching “' + esc(q.trim()) + '”' : scen === 'all' ? 'All calculated scores' : 'Scores in “' + esc(DEF.SCEN.filter(function (c) { return c[0] === scen; })[0][1]) + '”') + '</div>' +
       '<div class="vt" role="group" aria-label="View"><button type="button" data-view="scores" aria-pressed="false">Scores</button><button type="button" data-view="summary" aria-pressed="true">Summary</button></div></div>' +
       '<div class="sum"><h2>Summary for the report</h2><pre id="sumtext">' + esc(t) + '</pre><div class="row"><button type="button" class="btn" data-act="copy">Copy summary</button><span class="note" id="copied" aria-live="polite"></span></div>' +
       '<p class="note">Paste into your echo, Holter or pre-op report. Choose a scenario first to copy only that set.</p></div>';

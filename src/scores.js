@@ -14,6 +14,7 @@ var DEF = (function () {
   var F = {
     age: N('Age', 'yrs', { g: 'demo', min: 18, max: 110, step: 1 }),
     sex: C('Sex', [['male', 'Male'], ['female', 'Female']], { g: 'demo' }),
+    ethn: C('Ethnicity', [['white', 'White or other'], ['aa', 'Black / African American'], ['chinese', 'Chinese'], ['hispanic', 'Hispanic American']], { g: 'demo', def: 'white' }),
     wt: N('Weight', 'kg', { g: 'demo', min: 25, max: 300 }),
     ht: N('Height', 'cm', { g: 'demo', min: 120, max: 230, step: 1 }),
 
@@ -90,6 +91,15 @@ var DEF = (function () {
     enz: B('Raised troponin', { g: 'acs' }),
 
     /* score-specific (shown on the score card, not in the profile) */
+    cac: N('Coronary calcium score', 'Agatston', { local: 1, min: 0, max: 6000, step: 1 }),
+    syntax1: N('Anatomical SYNTAX score', 'points', { local: 1, min: 0, max: 120 }),
+    lmDisease: B('Left main involved', { local: 1 }),
+    daptMI: B('MI at the index presentation', { local: 1 }),
+    daptPrior: B('Prior PCI or prior MI (before the index procedure)', { local: 1 }),
+    daptPaclitaxel: B('Paclitaxel-eluting stent', { local: 1 }),
+    daptSmall: B('Stent diameter < 3 mm', { local: 1 }),
+    daptSVG: B('Stent in a saphenous vein graft', { local: 1 }),
+    daptHF: B('Heart failure or LVEF < 30%', { local: 1, auto: function (s) { return !!(s.hf || (s.ef != null && s.ef < 30)); } }),
     ascvdYrs: N('Years since first ASCVD event', 'yrs', { local: 1, min: 0, max: 80 }),
     s2region: C('SMART2 calibration', [['veryhigh', 'Very high (Egypt)'], ['high', 'High'], ['moderate', 'Moderate'], ['low', 'Low']], { local: 1, def: 'veryhigh' }),
     smAT: C('Antithrombotic', [['none', 'None'], ['aspirin', 'Single antiplatelet'], ['dapt', 'DAPT'], ['aspdoac', 'Aspirin + low-dose rivaroxaban']], { local: 1, autoDef: function (s) { return s.antiplatelet || s.anticoag ? 'aspirin' : 'none'; } }),
@@ -189,6 +199,51 @@ var DEF = (function () {
     euUrg: C('Urgency', [['elective', 'Elective'], ['urgent', 'Urgent'], ['emergency', 'Emergency'], ['salvage', 'Salvage']], { local: 1, def: 'elective' }),
     euWt: C('Weight of procedure', [['cabg', 'Isolated CABG'], ['single', 'Single non-CABG'], ['two', '2 procedures'], ['three', '3 or more']], { local: 1, def: 'cabg' }),
     qt: N('QT interval', 'ms', { local: 1, min: 200, max: 800, step: 1 }),
+    csrsVasoPredisp: B('Predisposition to vasovagal symptoms (warm crowded place, prolonged standing, fear, emotion, pain)', { local: 1 }),
+    csrsAxis: B('Abnormal QRS axis (under −30° or over 100°)', { local: 1 }),
+    csrsQRS: B('QRS duration over 130 ms', { local: 1 }),
+    csrsDx: C('Emergency-department diagnosis', [['', 'Neither'], ['vaso', 'Vasovagal syncope (−2)'], ['cardiac', 'Cardiac syncope (+2)']], { local: 1, def: '' }),
+    sfEcgAbn: B('Abnormal ECG (new change, or non-sinus rhythm)', { local: 1 }),
+    sfDyspnoea: B('Shortness of breath', { local: 1 }),
+    schwRecovery: B('QTc 480 ms or more in the 4th minute of recovery from exercise', { local: 1 }),
+    schwTdP: B('Torsade de pointes', { local: 1 }),
+    schwAlternans: B('T-wave alternans', { local: 1 }),
+    schwNotched: B('Notched T wave in 3 leads', { local: 1 }),
+    schwBradycardia: B('Low heart rate for age (children)', { local: 1 }),
+    schwSyncope: C('Syncope', [['', 'None'], ['stress', 'With stress (2)'], ['nostress', 'Without stress (1)']], { local: 1, def: '' }),
+    schwDeaf: B('Congenital deafness', { local: 1 }),
+    schwFamLQTS: B('Family member with definite LQTS', { local: 1 }),
+    schwFamSCD: B('Unexplained sudden death under 30 in an immediate family member', { local: 1 }),
+    cpPriorEvent: B('Prior cardiac event or arrhythmia', { local: 1 }),
+    cpCyanosis: B('Cyanosis (oxygen saturation under 90%)', { local: 1, auto: function (s) { return s.spo2 != null && s.spo2 < 90; } }),
+    cpMechValve: B('Mechanical valve', { local: 1 }),
+    cpVentDysf: B('Ventricular dysfunction (EF under 55%)', { local: 1, auto: function (s) { return s.ef != null && s.ef < 55; } }),
+    cpValveLVOT: B('High-risk left-sided valve disease or LVOT obstruction', { local: 1 }),
+    cpPAH: B('Pulmonary hypertension', { local: 1, auto: function (s) { return s.pasp != null && s.pasp > 50; } }),
+    cpAortopathy: B('High-risk aortopathy', { local: 1 }),
+    cpNoIntervention: B('No prior cardiac intervention', { local: 1 }),
+    cpLateAssess: B('First cardiac assessment late in pregnancy', { local: 1 }),
+    pahFC: C('WHO functional class', [['', 'Not assessed'], ['1', 'I'], ['2', 'II'], ['3', 'III'], ['4', 'IV']], { local: 1, def: '' }),
+    pah6mwd: N('6-minute walk distance', 'm', { local: 1, min: 0, max: 900, step: 1 }),
+    genSurg: B('Surgery under general anaesthetic or fracture in the past month', { local: 1 }),
+    genLimbPain: B('Unilateral lower-limb pain', { local: 1 }),
+    genPalpOedema: B('Pain on deep palpation of the leg with unilateral oedema', { local: 1 }),
+    percLegSwell: B('Unilateral leg swelling', { local: 1, auto: function (s) { return !!s.dvtLegSwollen; } }),
+    percSurg: B('Surgery or trauma in the past 4 weeks', { local: 1, auto: function (s) { return !!s.genSurg; } }),
+    percHormone: B('Oestrogen use (contraceptive or HRT)', { local: 1 }),
+    percLowProb: B('Clinical probability already low (Wells under 2, or gestalt under 15%)', { local: 1 }),
+    ddimer: N('D-dimer', 'ng/mL', { local: 1, min: 10, max: 50000, step: 10 }),
+    hesThromb: B('Thrombolysis or embolectomy needed', { local: 1 }),
+    hesBleed: B('Active bleeding or high risk of bleeding', { local: 1 }),
+    hesOxygen: B('Oxygen needed for more than 24 h to keep SpO₂ above 90%', { local: 1 }),
+    hesOnAC: B('PE occurred while on anticoagulation', { local: 1 }),
+    hesPain: B('Intravenous analgesia needed for more than 24 h', { local: 1 }),
+    hesOther: B('Medical or social reason for admission for more than 24 h', { local: 1 }),
+    hesLiver: B('Severe liver impairment', { local: 1 }),
+    hesPregnant: B('Pregnant', { local: 1 }),
+    hesHIT: B('Documented heparin-induced thrombocytopenia', { local: 1 }),
+    ehraClass: C('EHRA class', [['', 'Choose…'], ['1', '1 — no symptoms'], ['2a', '2a — mild, daily activity unaffected'], ['2b', '2b — moderate, troubled by symptoms'], ['3', '3 — severe, daily activity affected'], ['4', '4 — disabling, daily activity stopped']], { local: 1, def: '' }),
+    ccsClass: C('CCS class', [['', 'Choose…'], ['1', 'I — strenuous exertion only'], ['2', 'II — slight limitation'], ['3', 'III — marked limitation'], ['4', 'IV — any activity or at rest']], { local: 1, def: '' }),
     hf18: B('Heart failure first diagnosed 18 months ago or more', { local: 1 }),
     peDvtSigns: B('Clinical signs of DVT', { local: 1 }),
     peLikely: B('PE is the most likely diagnosis', { local: 1 }),
@@ -259,6 +314,7 @@ var DEF = (function () {
     d.paspEst = p.pasp == null && p.trv != null;
     d.pasp = p.pasp != null ? p.pasp : (p.trv != null ? 4 * p.trv * p.trv + 5 : null);
     d.trv = p.trv != null ? p.trv : (p.pasp != null && p.pasp > 5 ? Math.sqrt((p.pasp - 5) / 4) : null);
+    d.qtcB = (p.qt != null && p.hr > 0) ? p.qt / Math.sqrt(60 / p.hr) : null;
     d.hctEst = p.hct == null && p.hb != null;
     d.hct = p.hct != null ? p.hct : (p.hb != null ? p.hb * 3 : null);
     return d;
@@ -377,7 +433,62 @@ var DEF = (function () {
         summary: 'Framingham ' + f1(v) + '% 10-yr CVD' });
     },
     source: 'D’Agostino et al., Circulation 2008.',
-    status: 'ported'
+    status: 'verified', verifiedBy: 'the pycvdrisk library on 500 random patients (largest difference 0.00011 percentage points)', checked: '2026-11-24'
+  });
+
+  add({
+    id: 'pce', name: 'Pooled Cohort Equations', domain: 'Prevention', scen: ['prev'],
+    blurb: '10-year ASCVD risk, ages 40–79. The ACC/AHA tool; ESC guidelines use SCORE2.',
+    inputs: ['age', 'sex', 'ethn', 'sbp', 'tc', 'hdl', 'bptx', 'smoker', 'dm'],
+    calc: function (p, d) {
+      if (d.ascvd) return res({ na: 'Primary prevention only. Established ASCVD is already a secondary-prevention indication.' });
+      var m = need(p, ['age', 'sex', 'sbp', 'tc', 'hdl']);
+      if (m.length) return res({ missing: m });
+      if (p.age < 40 || p.age > 79) return res({ na: 'Validated for ages 40–79.' });
+      var v = UT.pce({ age: p.age, sex: p.sex, race: p.ethn === 'aa' ? 'black' : 'white', tc: p.tc, hdl: p.hdl,
+        sbp: p.sbp, bptx: p.bptx, smoker: p.smoker, dm: p.dm });
+      var c = v < 5 ? 0 : v < 7.5 ? 1 : v < 20 ? 2 : 3;
+      var lab = ['Low', 'Borderline', 'Intermediate', 'High'][c];
+      var act = c === 0 ? 'Lifestyle advice; no statin on risk grounds alone (ACC/AHA 2018).' :
+        c === 1 ? 'Risk discussion. A moderate-intensity statin is reasonable if risk enhancers are present — family history, LDL ≥ 160 mg/dL, metabolic syndrome, CKD, chronic inflammatory disease, high-risk ethnicity, persistently raised triglycerides, or Lp(a).' :
+          c === 2 ? 'Moderate-intensity statin, aiming for a 30–49% LDL reduction. A calcium score can reclassify when the decision is uncertain: CAC 0 may justify deferring, CAC ≥ 100 or ≥ 75th centile favours treating (ACC/AHA 2018).' :
+            'High-intensity statin, aiming for an LDL reduction of 50% or more (ACC/AHA 2018).';
+      var w = ['Derived from US cohorts, with only two ethnic groups — White/other and African American. It has not been validated in Egyptian or wider Middle Eastern populations, and it overestimates risk in several contemporary cohorts. SCORE2 recalibrated for a very-high-risk region is the better primary tool here; read this one as a cross-check.'];
+      if (p.ethn === 'chinese' || p.ethn === 'hispanic') w.push('No Chinese or Hispanic coefficients exist in this model, so the White/other equation was used.');
+      return res({ value: v, unit: '%', cat: c, catLabel: lab, warn: w, action: act,
+        lines: ['ACC/AHA 2018 bands: < 5% low, 5–7.4% borderline, 7.5–19.9% intermediate, ≥ 20% high.'],
+        summary: 'PCE ' + f1(v) + '% 10-yr ASCVD (' + lab.toLowerCase() + ')' });
+    },
+    source: 'Goff et al., Circulation 2014 (2013 ACC/AHA Pooled Cohort Equations); treatment bands from the 2018 AHA/ACC cholesterol guideline.',
+    status: 'verified', verifiedBy: 'the pycvdrisk library on 600 random patients across all four race-sex models (largest difference 0.00035 percentage points)', checked: '2026-11-24'
+  });
+
+  add({
+    id: 'mesa', name: 'MESA with calcium score', domain: 'Prevention', scen: ['prev'],
+    blurb: '10-year coronary heart disease risk including the CT calcium score, ages 45–85.',
+    inputs: ['age', 'sex', 'ethn', 'sbp', 'tc', 'hdl', 'bptx', 'statin', 'smoker', 'dm', 'famhx'],
+    local: ['cac'],
+    calc: function (p, d) {
+      if (d.ascvd) return res({ na: 'Primary prevention only.' });
+      var m = need(p, ['age', 'sex', 'sbp', 'tc', 'hdl', 'cac']);
+      if (m.length) return res({ missing: m });
+      if (p.age < 45 || p.age > 85) return res({ na: 'Validated for ages 45–85.' });
+      var q = { age: p.age, sex: p.sex, race: p.ethn, tc: p.tc, hdl: p.hdl, sbp: p.sbp, bptx: p.bptx,
+        lipidMed: p.statin, smoker: p.smoker, dm: p.dm, famhx: p.famhx, cac: p.cac };
+      var v = UT.mesa(q), noCac = UT.mesa(Object.keys(q).reduce(function (o, k) { o[k] = k === 'cac' ? 0 : q[k]; return o; }, {}));
+      var c = v < 5 ? 0 : v < 7.5 ? 1 : v < 20 ? 2 : 3;
+      var lab = ['Low', 'Borderline', 'Intermediate', 'High'][c];
+      var lines = ['Same risk factors with a calcium score of zero would give ' + f1(noCac) + '%, so the measured calcium moves the estimate by ' + f1(v - noCac) + ' percentage points.'];
+      if (p.cac === 0) lines.push('A calcium score of zero carries a strong negative predictive value, but it does not exclude non-calcified plaque, and it carries less weight in a smoker, in diabetes or under 45.');
+      var w = ['This model predicts hard coronary events (MI and coronary death) only — not stroke — so it is not interchangeable with SCORE2 or the Pooled Cohort Equations.',
+        'MESA counts a family history of myocardial infarction in a parent, sibling or child at any age; the profile field is family history of premature CVD, so check it fits before trusting the result.'];
+      return res({ value: v, unit: '%', cat: c, catLabel: lab, lines: lines, warn: w,
+        action: c >= 2 ? 'Statin treatment indicated on this estimate; a calcium score of 100 or more, or at the 75th centile or above, favours treating regardless of the percentage (ACC/AHA 2018).' :
+          'Risk discussion. Calcium scoring is most useful exactly here, where the decision is otherwise borderline.',
+        summary: 'MESA ' + f1(v) + '% 10-yr CHD at CAC ' + p.cac });
+    },
+    source: 'McClelland et al., JACC 2015. Coefficients taken from the R CVrisk package data, then checked against the official NHLBI calculator. MESA has coefficients for White, Chinese, African American and Hispanic participants only; “White or other” uses the White coefficient, so for an Egyptian patient this is the ethnicity term being applied.',
+    status: 'verified', verifiedBy: 'the official NHLBI MESA calculator (13 patients: ages 45–85, both sexes, all four ethnic groups, calcium scores 0–2000)', checked: '2026-11-24'
   });
 
   /* ===== Atrial fibrillation ===== */
@@ -681,6 +792,75 @@ var DEF = (function () {
   });
 
   add({
+    id: 'dapt', name: 'DAPT score', domain: 'Intervention and surgery', scen: ['pci', 'acs'],
+    blurb: 'Whether to extend DAPT beyond 12 months after a stent, weighing ischaemia against bleeding.',
+    inputs: ['age', 'smoker', 'dm'],
+    local: ['daptMI', 'daptPrior', 'daptPaclitaxel', 'daptSmall', 'daptHF', 'daptSVG'],
+    calc: function (p, d) {
+      var m = need(p, ['age']);
+      if (m.length) return res({ missing: m });
+      var parts = [], s = 0;
+      var agePts = p.age >= 75 ? -2 : p.age >= 65 ? -1 : 0;
+      s += agePts;
+      parts.push('Age ' + p.age + ': ' + agePts);
+      [['daptMI', 'MI at presentation', 1], ['daptPrior', 'Prior PCI or MI', 1], ['smoker', 'Cigarette smoking', 1],
+       ['dm', 'Diabetes', 1], ['daptPaclitaxel', 'Paclitaxel-eluting stent', 1], ['daptSmall', 'Stent < 3 mm', 1],
+       ['daptHF', 'Heart failure or EF < 30%', 2], ['daptSVG', 'Vein graft stent', 2]
+      ].forEach(function (x) { if (p[x[0]]) { s += x[2]; parts.push(x[1] + ': +' + x[2]); } });
+      var hi = s >= 2;
+      var lines = [parts.join(' · '),
+        'Applies only to patients who have already completed 12 months of DAPT without a major bleed or ischaemic event — that is how the derivation cohort was defined.'];
+      var w = [];
+      if (p.age >= 75) w.push('Age 75 or over subtracts 2 points on its own, so an older patient rarely reaches a score of 2 whatever else is present. That is the model behaving as intended, not a missing risk factor.');
+      if (p.daptPaclitaxel) w.push('Paclitaxel-eluting stents are no longer in routine use; the point is kept for fidelity to the published score.');
+      return res({ value: s, unit: 'points', cat: hi ? 2 : 0, catLabel: hi ? 'Prolonged DAPT favoured' : 'Prolonged DAPT not favoured',
+        lines: lines, warn: w,
+        action: hi ? 'Score 2 or more: continuing thienopyridine beyond 12 months reduced ischaemic events more than it increased bleeding in DAPT. Reasonable to extend, having checked bleeding risk separately with PRECISE-DAPT.'
+          : 'Score under 2: extending DAPT increased bleeding more than it reduced ischaemia. Stop the thienopyridine at 12 months unless something else argues for continuing.',
+        summary: 'DAPT score ' + s + ' (' + (hi ? 'extend' : 'do not extend') + ')' });
+    },
+    source: 'Yeh et al., JAMA 2016, from the DAPT trial. Point table checked item by item against MDCalc.',
+    status: 'verified', verifiedBy: 'the MDCalc DAPT Score page (every item and its point value, and the score ≥ 2 threshold)', checked: '2026-11-24'
+  });
+
+  add({
+    id: 'syntax2', name: 'SYNTAX Score II', domain: 'Intervention and surgery', scen: ['pci'],
+    blurb: '4-year mortality after PCI and after CABG, and which the model favours. Needs the anatomical SYNTAX score.',
+    inputs: ['age', 'sex', 'ef', 'cr', 'wt', 'copd', 'pad'],
+    local: ['syntax1', 'lmDisease'],
+    calc: function (p, d) {
+      var m = need(p, ['syntax1', 'age', 'sex', 'ef']);
+      if (d.crcl == null) ['cr', 'wt'].forEach(function (k) { if (p[k] == null) m.push(k); });
+      if (m.length) return res({ missing: m });
+      if (p.age < 18 || p.age > 100) return res({ na: 'Age must be 18–100.' });
+      if (p.ef < 10) return res({ na: 'LVEF below 10% is outside the model.' });
+      var r = UT.syntax2({ ss1: p.syntax1, age: p.age, crcl: d.crcl, lvef: p.ef,
+        lms: p.lmDisease, male: p.sex === 'male', copd: p.copd, pvd: p.pad });
+      var worst = Math.max(r.mPCI, r.mCABG);
+      var c = worst < 5 ? 0 : worst < 10 ? 1 : worst < 20 ? 2 : 3;
+      var lines = [
+        'PCI: SYNTAX II ' + f1(r.ss2PCI) + ', 4-year mortality ' + f1(r.mPCI) + '%',
+        'CABG: SYNTAX II ' + f1(r.ss2CABG) + ', 4-year mortality ' + f1(r.mCABG) + '%',
+        'Difference between the two: p = ' + (r.p < 0.001 ? '< 0.001' : r.p.toFixed(3)) +
+          (r.p < 0.05 ? ', so the model separates them.' : ', so the model does not separate them and either is acceptable on mortality grounds.'),
+        'CrCl ' + f0(d.crcl) + ' mL/min (Cockcroft-Gault)' + (d.crcl > 90 ? ', entered as 90 — the model caps it there.' : '') +
+          (p.ef > 50 ? ' · LVEF entered as 50%, the model’s ceiling.' : '')
+      ];
+      var w = ['Mortality only. It says nothing about repeat revascularisation, stroke or angina relief, and those often decide the real conversation.',
+        'Derived from the SYNTAX trial, so left main or three-vessel disease, and the surgical and PCI results of that era. It does not replace the Heart Team.'];
+      if (p.pad) w.push('Peripheral artery disease in the profile is being used for the model’s PVD term.');
+      return res({ value: r.rec, text: 1, cat: c, catLabel: 'PCI ' + f1(r.mPCI) + '% · CABG ' + f1(r.mCABG) + '%',
+        lines: lines, warn: w,
+        action: r.rec === 'CABG' ? 'The model favours CABG on 4-year mortality. Refer to the Heart Team with these numbers.'
+          : r.rec === 'PCI' ? 'The model favours PCI on 4-year mortality.'
+            : 'Equipoise on mortality: the choice turns on anatomy, completeness of revascularisation, comorbidity and what the patient wants.',
+        summary: 'SYNTAX II: PCI ' + f1(r.mPCI) + '% vs CABG ' + f1(r.mCABG) + '% 4-yr mortality (' + r.rec + ')' });
+    },
+    source: 'Farooq et al., Lancet 2013. Coefficients, baseline hazard, nomogram constants and covariance matrix taken from the official calculator’s own code at syntaxscore.org. The anatomical SYNTAX score itself is entered by hand — scoring the angiogram lesion by lesion is not part of this app.',
+    status: 'verified', verifiedBy: 'the official syntaxscore.org model run on 12 patients: both SYNTAX II scores, both 4-year mortalities and the p-value all reproduced, and the same treatment recommendation rule', checked: '2026-11-24'
+  });
+
+  add({
     id: 'archbr', name: 'ARC-HBR', domain: 'Intervention and surgery', scen: ['pci'],
     blurb: 'High bleeding risk at PCI: 1 major or 2 minor criteria. Lab and age criteria come from the profile.',
     inputs: ['age', 'sex', 'cr', 'hb', 'plt', 'anticoag', 'nsaid'],
@@ -849,10 +1029,10 @@ var DEF = (function () {
     id: 'qtc', name: 'QTc', domain: 'Arrhythmia and ECG', scen: ['prev', 'af', 'acs', 'hf'],
     blurb: 'Corrected QT by Bazett, Fridericia, Framingham and Hodges.',
     inputs: ['hr', 'sex'], local: ['qt'],
-    calc: function (p) {
+    calc: function (p, d) {
       var m = need(p, ['qt', 'hr']);
       if (m.length) return res({ missing: m });
-      var rr = 60 / p.hr, b = p.qt / Math.sqrt(rr), fr = p.qt / Math.pow(rr, 1 / 3), fm = p.qt + 154 * (1 - rr), ho = p.qt + 1.75 * (p.hr - 60);
+      var rr = 60 / p.hr, b = d.qtcB, fr = p.qt / Math.pow(rr, 1 / 3), fm = p.qt + 154 * (1 - rr), ho = p.qt + 1.75 * (p.hr - 60);
       var lim = p.sex === 'female' ? 460 : 450, c = b > 500 ? 3 : b > lim ? 2 : b < 340 ? 1 : 0;
       var L = ['Fridericia ' + f0(fr) + ' · Framingham ' + f0(fm) + ' · Hodges ' + f0(ho) + ' ms', 'QT ' + f0(p.qt) + ' ms at ' + f0(p.hr) + ' bpm (RR ' + rr.toFixed(2) + ' s)'];
       if (Math.abs(b - fr) > 20) L.push('At this heart rate Bazett and Fridericia differ by ' + f0(Math.abs(b - fr)) + ' ms; away from 60 bpm Fridericia is the more reliable of the two.');
@@ -1021,6 +1201,349 @@ var DEF = (function () {
         summary: 'Duke-ISCVID: ' + v.toLowerCase() + ' endocarditis (' + M + ' major, ' + N + ' minor)' });
     },
     source: 'Fowler et al., Clin Infect Dis 2023 (2023 Duke-ISCVID criteria). Definite: 2 major, or 1 major + 3 minor, or 5 minor. Possible: 1 major + 1 minor, or 3 minor.',
+    status: 'new'
+  });
+
+  add({
+    id: 'geneva', name: 'Revised Geneva score', domain: 'VTE and pulmonary embolism', scen: ['pe'],
+    blurb: 'Clinical probability of PE from objective findings only, with no judgement call.',
+    inputs: ['age', 'hr', 'cancer'], local: ['priorVTE', 'genSurg', 'genLimbPain', 'haemoptysis', 'genPalpOedema'],
+    calc: function (p) {
+      var m = need(p, ['age', 'hr']);
+      if (m.length) return res({ missing: m });
+      var hrPts = p.hr >= 95 ? 5 : p.hr >= 75 ? 3 : 0, hrSimp = p.hr >= 95 ? 2 : p.hr >= 75 ? 1 : 0;
+      var it = [[p.age > 65, 1, 1, 'age over 65'], [p.priorVTE, 3, 1, 'previous PE or DVT'], [p.genSurg, 2, 1, 'surgery or fracture in the past month'],
+        [p.cancer, 2, 1, 'active malignancy'], [p.genLimbPain, 3, 1, 'unilateral lower-limb pain'], [p.haemoptysis, 2, 1, 'haemoptysis'],
+        [p.genPalpOedema, 4, 1, 'pain on deep palpation with unilateral oedema']];
+      var s = hrPts, sp = hrSimp, has = [];
+      it.forEach(function (x) { if (x[0]) { s += x[1]; sp += x[2]; has.push(x[3]); } });
+      if (hrPts) has.push('heart rate ' + f0(p.hr));
+      var three = s <= 3 ? 'Low' : s <= 10 ? 'Intermediate' : 'High', c = s <= 3 ? 0 : s <= 10 ? 1 : 3;
+      return res({ value: s, unit: '/ 25', cat: c, catLabel: three + ' probability',
+        lines: ['Two-level: ' + (s <= 5 ? 'PE unlikely' : 'PE likely') + ' (cut-off 5)',
+          'Simplified version ' + sp + '/10: ' + (sp <= 1 ? 'low' : sp <= 4 ? 'intermediate' : 'high') + ', ' + (sp <= 2 ? 'PE unlikely' : 'PE likely'),
+          has.length ? 'Scored: ' + has.join(', ') : 'No items scored'],
+        action: s <= 5 ? 'PE unlikely: a negative D-dimer rules out PE without imaging.' : 'PE likely: CT pulmonary angiography.',
+        summary: 'Revised Geneva ' + s + ' (' + three.toLowerCase() + ' probability)' });
+    },
+    source: 'Le Gal et al., Ann Intern Med 2006; simplified version Klok et al., Arch Intern Med 2008; 2019 ESC pulmonary embolism guidelines.',
+    status: 'new'
+  });
+
+  add({
+    id: 'perc', name: 'PERC rule', domain: 'VTE and pulmonary embolism', scen: ['pe'],
+    blurb: 'Rules out PE without a D-dimer, but only when clinical probability is already low.',
+    inputs: ['age', 'hr', 'spo2'], local: ['percLegSwell', 'haemoptysis', 'percSurg', 'priorVTE', 'percHormone', 'percLowProb'],
+    calc: function (p) {
+      var m = need(p, ['age', 'hr']);
+      if (m.length) return res({ missing: m });
+      var it = [[p.age >= 50, 'age 50 or over'], [p.hr >= 100, 'heart rate 100 or more'], [p.spo2 != null && p.spo2 < 95, 'SpO₂ below 95%'],
+        [p.percLegSwell, 'unilateral leg swelling'], [p.haemoptysis, 'haemoptysis'], [p.percSurg, 'surgery or trauma in the past 4 weeks'],
+        [p.priorVTE, 'previous PE or DVT'], [p.percHormone, 'oestrogen use']];
+      var pos = it.filter(function (x) { return x[0]; }).map(function (x) { return x[1]; });
+      var clear = pos.length === 0;
+      var w = p.spo2 == null ? ['SpO₂ not entered, so not assessed.'] : [];
+      if (!p.percLowProb) w.push('PERC only applies when clinical probability is already low (Wells < 2 or gestalt under 15%). Tick that below to use it.');
+      return res({ value: clear ? 'All 8 negative' : pos.length + ' positive', text: true, cat: clear && p.percLowProb ? 0 : 1,
+        catLabel: clear ? (p.percLowProb ? 'PE ruled out' : 'Needs low probability') : 'Cannot rule out',
+        lines: [clear ? 'None of the 8 criteria is present.' : 'Present: ' + pos.join(', ')], warn: w,
+        action: clear && p.percLowProb ? 'All 8 negative with low clinical probability: PE is excluded, no D-dimer needed (under 2% risk).' : 'PERC does not apply here: go on to D-dimer or imaging as the clinical probability dictates.',
+        summary: 'PERC: ' + (clear ? (p.percLowProb ? 'all negative, PE excluded' : 'all negative but probability not low') : pos.length + ' criteria positive') });
+    },
+    source: 'Kline et al., J Thromb Haemost 2004 and 2008.',
+    status: 'new'
+  });
+
+  add({
+    id: 'years', name: 'YEARS algorithm', domain: 'VTE and pulmonary embolism', scen: ['pe'],
+    blurb: 'Varies the D-dimer threshold by clinical items, cutting the number of CT scans needed.',
+    inputs: [], local: ['peDvtSigns', 'haemoptysis', 'peLikely', 'ddimer'],
+    calc: function (p) {
+      var it = [[p.peDvtSigns, 'clinical signs of DVT'], [p.haemoptysis, 'haemoptysis'], [p.peLikely, 'PE the most likely diagnosis']];
+      var pos = it.filter(function (x) { return x[0]; }).map(function (x) { return x[1]; });
+      var thr = pos.length === 0 ? 1000 : 500;
+      var L = [pos.length ? 'Present: ' + pos.join(', ') : 'None of the three items present', 'D-dimer threshold ' + thr + ' ng/mL'];
+      if (p.ddimer == null) return res({ value: thr, dp: 0, unit: 'ng/mL threshold', cat: null, lines: L,
+        action: 'Enter the D-dimer to apply the threshold.', missing: [], summary: 'YEARS: ' + pos.length + ' items, D-dimer threshold ' + thr + ' ng/mL' });
+      var out = p.ddimer < thr;
+      return res({ value: out ? 'PE excluded' : 'CTPA needed', text: true, cat: out ? 0 : 3, catLabel: 'D-dimer ' + f0(p.ddimer) + ' vs ' + thr,
+        lines: L, action: out ? 'D-dimer below the threshold: PE is excluded without imaging.' : 'D-dimer at or above the threshold: CT pulmonary angiography.',
+        warn: ['Not validated in pregnancy without the adapted algorithm, or for suspected recurrent PE on anticoagulation.'],
+        summary: 'YEARS: ' + (out ? 'PE excluded' : 'CTPA needed') + ' (D-dimer ' + f0(p.ddimer) + ', threshold ' + thr + ')' });
+    },
+    source: 'van der Hulle et al., Lancet 2017.',
+    status: 'new'
+  });
+
+  add({
+    id: 'hestia', name: 'Hestia criteria', domain: 'VTE and pulmonary embolism', scen: ['pe'],
+    blurb: 'Whether acute PE can be treated at home: every answer must be no.',
+    inputs: ['cr', 'age', 'sex', 'wt'],
+    local: ['haemoUnstable', 'hesThromb', 'hesBleed', 'hesOxygen', 'hesOnAC', 'hesPain', 'hesOther', 'hesLiver', 'hesPregnant', 'hesHIT'],
+    calc: function (p, d) {
+      var crcl = d.crcl;
+      var it = [[p.haemoUnstable, 'haemodynamically unstable'], [p.hesThromb, 'thrombolysis or embolectomy needed'], [p.hesBleed, 'active bleeding or high bleeding risk'],
+        [p.hesOxygen, 'oxygen needed for more than 24 h to keep SpO₂ above 90%'], [p.hesOnAC, 'PE occurred on anticoagulation'], [p.hesPain, 'intravenous analgesia needed for more than 24 h'],
+        [p.hesOther, 'medical or social reason for admission'], [crcl != null && crcl < 30, 'creatinine clearance below 30 mL/min'], [p.hesLiver, 'severe liver impairment'],
+        [p.hesPregnant, 'pregnant'], [p.hesHIT, 'history of heparin-induced thrombocytopenia']];
+      var yes = it.filter(function (x) { return x[0]; }).map(function (x) { return x[1]; });
+      var ok2 = yes.length === 0;
+      return res({ value: ok2 ? 'Suitable for home treatment' : 'Admit', text: true, cat: ok2 ? 0 : 2, catLabel: yes.length + ' of 11 positive',
+        lines: [yes.length ? 'Positive: ' + yes.join('; ') : 'All 11 criteria negative.', crcl != null ? 'Creatinine clearance ' + f0(crcl) + ' mL/min' : 'Creatinine clearance not calculated: enter creatinine, age, sex and weight.'],
+        action: ok2 ? 'All criteria negative: outpatient treatment is reasonable, with early follow-up arranged.' : 'At least one criterion positive: admit.',
+        summary: 'Hestia: ' + (ok2 ? 'suitable for home treatment' : yes.length + ' criteria positive, admit') });
+    },
+    source: 'Zondag et al., J Thromb Haemost 2011; 2019 ESC pulmonary embolism guidelines.',
+    status: 'new'
+  });
+
+  add({
+    id: 'bova', name: 'Bova score', domain: 'VTE and pulmonary embolism', scen: ['pe'],
+    blurb: 'Risk of complications over 30 days in normotensive acute PE.',
+    inputs: ['sbp', 'hr'], local: ['peTroponin', 'rvDysfunction'],
+    calc: function (p) {
+      var m = need(p, ['sbp', 'hr']);
+      if (m.length) return res({ missing: m });
+      if (p.sbp < 90) return res({ na: 'Systolic BP below 90 mmHg: the patient is not normotensive, so Bova does not apply. Use the ESC high-risk pathway.' });
+      var s = (p.sbp <= 100 ? 2 : 0) + (p.peTroponin ? 2 : 0) + (p.rvDysfunction ? 2 : 0) + (p.hr >= 110 ? 1 : 0);
+      var st = s <= 2 ? 0 : s <= 4 ? 1 : 2;
+      return res({ value: s, unit: '/ 7', cat: [0, 1, 3][st], catLabel: 'Stage ' + ['I', 'II', 'III'][st],
+        lines: ['PE-related complications within 30 days ≈ ' + [4.4, 18, 42][st] + '%',
+          'SBP ' + f0(p.sbp) + (p.sbp <= 100 ? ' (2)' : ' (0)') + ' · troponin ' + (p.peTroponin ? '2' : '0') + ' · RV dysfunction ' + (p.rvDysfunction ? '2' : '0') + ' · HR ' + f0(p.hr) + (p.hr >= 110 ? ' (1)' : ' (0)')],
+        action: st === 0 ? 'Stage I: low risk of complications.' : st === 1 ? 'Stage II: monitor closely.' : 'Stage III: high risk; manage in a monitored bed with reperfusion ready.',
+        summary: 'Bova ' + s + ' (stage ' + ['I', 'II', 'III'][st] + ', complications ' + [4.4, 18, 42][st] + '%)' });
+    },
+    source: 'Bova et al., Eur Respir J 2014.',
+    status: 'new'
+  });
+
+  add({
+    id: 'orbit', name: 'ORBIT', domain: 'Atrial fibrillation', scen: ['af'],
+    blurb: 'Bleeding risk on anticoagulation for AF; uses only objective values.',
+    inputs: ['hb', 'hct', 'sex', 'age', 'cr', 'priorBleed', 'antiplatelet'],
+    calc: function (p, d) {
+      var m = need(p, ['age', 'sex']);
+      if (m.length) return res({ missing: m });
+      var low = p.hb != null ? p.hb < (p.sex === 'female' ? 12 : 13) : (d.hct != null ? d.hct < (p.sex === 'female' ? 36 : 40) : null);
+      var it = [[low === true, 2, 'anaemia'], [p.age > 74, 1, 'age over 74'], [p.priorBleed, 2, 'bleeding history'],
+        [d.egfr != null && d.egfr < 60, 1, 'eGFR below 60'], [p.antiplatelet, 1, 'antiplatelet treatment']];
+      var s = 0, has = [];
+      it.forEach(function (x) { if (x[0]) { s += x[1]; has.push(x[2]); } });
+      var g = s <= 2 ? 0 : s === 3 ? 1 : 3;
+      var w = [];
+      if (low == null) w.push('Haemoglobin and haematocrit not entered: anaemia (2 points) not assessed.');
+      if (d.egfr == null) w.push('Creatinine not entered: eGFR (1 point) not assessed.');
+      return res({ value: s, unit: '/ 7', cat: g, catLabel: ['Low', 'Medium', '', 'High'][g], warn: w,
+        lines: ['Major bleeding ≈ ' + [2.4, 4.7, 0, 8.1][g] + ' per 100 patient-years', has.length ? 'Scored: ' + has.join(', ') : 'No items scored'],
+        action: 'Like HAS-BLED, a high score calls for closer follow-up and correction of what can be corrected, not for withholding anticoagulation.',
+        summary: 'ORBIT ' + s + ' (' + ['low', 'medium', '', 'high'][g] + ' bleeding risk)' });
+    },
+    source: 'O’Brien et al., Eur Heart J 2015.',
+    status: 'new'
+  });
+
+  add({
+    id: 'hatch', name: 'HATCH score', domain: 'Atrial fibrillation', scen: ['af'],
+    blurb: 'Likelihood that paroxysmal AF will progress to persistent AF.',
+    inputs: ['htn', 'age', 'cevd', 'copd', 'hf'],
+    calc: function (p) {
+      if (p.age == null) return res({ missing: ['age'] });
+      var it = [[p.htn, 1, 'hypertension'], [p.age > 75, 1, 'age over 75'], [p.cevd, 2, 'previous stroke or TIA'], [p.copd, 1, 'chronic lung disease'], [p.hf, 2, 'heart failure']];
+      var s = 0, has = [];
+      it.forEach(function (x) { if (x[0]) { s += x[1]; has.push(x[2]); } });
+      var c = s === 0 ? 0 : s <= 2 ? 1 : 3;
+      return res({ value: s, unit: '/ 7', cat: c, catLabel: s === 0 ? 'Low' : s <= 2 ? 'Intermediate' : 'High',
+        lines: ['Progression to persistent AF within a year ≈ ' + (s === 0 ? '6' : s <= 2 ? '12' : '50') + '%', has.length ? 'Scored: ' + has.join(', ') : 'No items scored'],
+        action: s >= 3 ? 'High score: progression is likely, which argues for earlier rhythm control and closer follow-up.' : 'Lower score: progression is less likely over the next year.',
+        summary: 'HATCH ' + s + '/7 (progression risk ' + (s === 0 ? 'low' : s <= 2 ? 'intermediate' : 'high') + ')' });
+    },
+    source: 'de Vos et al., J Am Coll Cardiol 2010.',
+    status: 'new'
+  });
+
+  add({
+    id: 'ehra', name: 'EHRA symptom class', domain: 'Atrial fibrillation', scen: ['af'],
+    blurb: 'How much the AF itself troubles the patient, which guides rhythm control.',
+    inputs: [], local: ['ehraClass'],
+    calc: function (p) {
+      if (!p.ehraClass) return res({ missing: ['ehraClass'] });
+      var T = { '1': ['1', 'None', 'AF causes no symptoms.', 0], '2a': ['2a', 'Mild', 'Normal daily activity is not affected by symptoms.', 0],
+        '2b': ['2b', 'Moderate', 'Normal daily activity is not affected, but the patient is troubled by symptoms.', 1],
+        '3': ['3', 'Severe', 'Normal daily activity is affected by symptoms.', 2], '4': ['4', 'Disabling', 'Normal daily activity has been discontinued.', 3] };
+      var t = T[p.ehraClass];
+      return res({ value: 'EHRA ' + t[0], text: true, cat: t[3], catLabel: t[1], lines: [t[2]],
+        action: t[3] >= 1 ? 'Class 2b or worse: rhythm control to improve symptoms should be considered (ESC 2024).' : 'Class 1 or 2a: rate control is usually enough for symptoms; anticoagulation is decided separately.',
+        summary: 'EHRA class ' + t[0] + ' (' + t[1].toLowerCase() + ')' });
+    },
+    source: 'Modified EHRA score, Wynn et al., Europace 2014; 2024 ESC atrial fibrillation guidelines.',
+    status: 'new'
+  });
+
+  add({
+    id: 'killipcls', name: 'Killip class', domain: 'ACS', scen: ['acs'],
+    blurb: 'Heart failure at presentation in acute MI; feeds GRACE and TIMI.',
+    inputs: ['killip'],
+    calc: function (p) {
+      var k = +p.killip, T = [['I', 'No clinical signs of heart failure', 6], ['II', 'Crackles, raised JVP or a third heart sound', 17],
+        ['III', 'Frank pulmonary oedema', 38], ['IV', 'Cardiogenic shock', 81]][k - 1];
+      return res({ value: 'Class ' + T[0], text: true, cat: [0, 1, 2, 3][k - 1], catLabel: T[1],
+        lines: ['In-hospital mortality in the original 1967 series ≈ ' + T[2] + '%'],
+        warn: ['Those figures predate reperfusion; mortality today is substantially lower, but the ranking still holds.'],
+        action: k >= 2 ? 'Killip II or worse: raises GRACE and TIMI and argues for an early invasive strategy.' : 'Killip I: no heart failure at presentation.',
+        summary: 'Killip class ' + T[0] + ' (' + T[1].toLowerCase() + ')' });
+    },
+    source: 'Killip & Kimball, Am J Cardiol 1967.',
+    status: 'new'
+  });
+
+  add({
+    id: 'ccs', name: 'CCS angina class', domain: 'Chronic coronary syndrome', scen: ['prev'],
+    blurb: 'How much ordinary activity angina limits.',
+    inputs: [], local: ['ccsClass'],
+    calc: function (p) {
+      if (!p.ccsClass) return res({ missing: ['ccsClass'] });
+      var T = { '1': ['I', 'Angina only with strenuous, rapid or prolonged exertion; ordinary activity does not cause angina.', 0],
+        '2': ['II', 'Slight limitation: angina on walking more than two blocks on the level, or climbing more than one flight briskly.', 1],
+        '3': ['III', 'Marked limitation: angina on walking one to two blocks on the level, or one flight of stairs at normal pace.', 2],
+        '4': ['IV', 'Angina on any physical activity, or at rest.', 3] };
+      var t = T[p.ccsClass];
+      return res({ value: 'Class ' + t[0], text: true, cat: t[2], catLabel: ['Minimal', 'Slight', 'Marked', 'Severe'][t[2]] + ' limitation', lines: [t[1]],
+        action: t[2] >= 3 ? 'Class IV: counts as CCS 4 in EuroSCORE II and argues for prompt assessment.' : 'Used to track symptoms over time and to judge the benefit of revascularisation.',
+        summary: 'CCS angina class ' + t[0] });
+    },
+    source: 'Campeau, Circulation 1976.',
+    status: 'new'
+  });
+
+  /* ===== Syncope ===== */
+  add({
+    id: 'csrs', name: 'Canadian Syncope Risk Score', domain: 'Arrhythmia and ECG', scen: [],
+    blurb: 'Risk of a serious adverse event within 30 days of syncope in the emergency department.',
+    inputs: ['sbp', 'cad', 'hf', 'af', 'enz', 'hr'], local: ['qt', 'csrsVasoPredisp', 'csrsAxis', 'csrsQRS', 'csrsDx'],
+    calc: function (p, d) {
+      if (p.sbp == null) return res({ missing: ['sbp'] });
+      var heart = !!(p.cad || p.hf || p.af), bpAbn = p.sbp < 90 || p.sbp > 180, qtcHigh = d.qtcB != null && d.qtcB > 480;
+      var it = [[p.csrsVasoPredisp, -1, 'predisposition to vasovagal symptoms'], [heart, 1, 'history of heart disease'], [bpAbn, 2, 'systolic BP below 90 or above 180'],
+        [p.enz, 2, 'raised troponin'], [p.csrsAxis, 1, 'abnormal QRS axis'], [p.csrsQRS, 1, 'QRS duration over 130 ms'], [qtcHigh, 2, 'QTc over 480 ms'],
+        [p.csrsDx === 'vaso', -2, 'vasovagal syncope diagnosed'], [p.csrsDx === 'cardiac', 2, 'cardiac syncope diagnosed']];
+      var s = 0, has = [];
+      it.forEach(function (x) { if (x[0]) { s += x[1]; has.push(x[2] + ' (' + (x[1] > 0 ? '+' : '') + x[1] + ')'); } });
+      var RATE = { '-3': 0.4, '-2': 0.7, '-1': 1.2, '0': 1.9, '1': 3.1, '2': 5.1, '3': 8.1, '4': 12.9, '5': 19.7, '6': 28.9, '7': 40.3, '8': 52.8, '9': 65.0, '10': 75.4, '11': 83.6 };
+      var sc = Math.max(-3, Math.min(11, s)), rate = RATE[String(sc)];
+      var g = s <= -2 ? 0 : s <= 0 ? 0 : s <= 3 ? 1 : s <= 5 ? 2 : 3;
+      var lab = s <= -2 ? 'Very low' : s <= 0 ? 'Low' : s <= 3 ? 'Medium' : s <= 5 ? 'High' : 'Very high';
+      var w = [];
+      if (d.qtcB == null) w.push('QT and heart rate not entered: the QTc item (2 points) was not assessed.');
+      if (!p.csrsDx) w.push('No emergency-department diagnosis chosen, so neither the −2 nor the +2 adjustment was applied.');
+      return res({ value: s, unit: 'points', cat: g, catLabel: lab + ' risk',
+        lines: ['Serious adverse event within 30 days ≈ ' + rate + '%', has.length ? has.join(' · ') : 'No items scored'], warn: w,
+        action: s <= 0 ? 'Low or very low risk: discharge is generally safe with advice and follow-up.' : s <= 3 ? 'Medium risk: a period of observation and outpatient cardiac work-up.' : 'High or very high risk: admit for monitoring.',
+        summary: 'Canadian Syncope Risk Score ' + s + ' (' + lab.toLowerCase() + ' risk, 30-day serious outcome ' + rate + '%)' });
+    },
+    source: 'Thiruganasambandamoorthy et al., CMAJ 2016; validation CMAJ 2020. For syncope with no serious cause found after emergency assessment.',
+    status: 'new'
+  });
+
+  add({
+    id: 'sfsr', name: 'San Francisco Syncope Rule', domain: 'Arrhythmia and ECG', scen: [],
+    blurb: 'CHESS: any one positive marks the patient as high risk at 7 days.',
+    inputs: ['hf', 'hct', 'hb', 'sbp'], local: ['sfEcgAbn', 'sfDyspnoea'],
+    calc: function (p, d) {
+      if (p.sbp == null) return res({ missing: ['sbp'] });
+      var it = [[p.hf, 'C — history of heart failure'], [d.hct != null && d.hct < 30, 'H — haematocrit below 30%'], [p.sfEcgAbn, 'E — abnormal ECG'],
+        [p.sfDyspnoea, 'S — shortness of breath'], [p.sbp < 90, 'S — systolic BP below 90 at triage']];
+      var pos = it.filter(function (x) { return x[0]; }).map(function (x) { return x[1]; });
+      var high = pos.length > 0;
+      return res({ value: high ? 'High risk' : 'Low risk', text: true, cat: high ? 3 : 0, catLabel: pos.length + ' of 5 positive',
+        lines: [pos.length ? 'Positive: ' + pos.join('; ') : 'None of the five criteria is present.'],
+        warn: (d.hct == null ? ['Haematocrit and haemoglobin not entered: that criterion was not assessed.'] : []).concat(['External validations have found lower sensitivity than the original study; use it alongside judgement, not instead of it.']),
+        action: high ? 'High risk of a serious outcome within 7 days: admit or observe.' : 'No criterion present: serious outcomes within 7 days are uncommon.',
+        summary: 'San Francisco Syncope Rule: ' + (high ? 'high risk (' + pos.length + ' positive)' : 'low risk') });
+    },
+    source: 'Quinn et al., Ann Emerg Med 2004 and 2006.',
+    status: 'new'
+  });
+
+  add({
+    id: 'schwartz', name: 'Schwartz LQTS score', domain: 'Arrhythmia and ECG', scen: [],
+    blurb: 'Probability of congenital long QT syndrome from ECG, history and family history.',
+    inputs: ['sex', 'hr'], local: ['qt', 'schwRecovery', 'schwTdP', 'schwAlternans', 'schwNotched', 'schwBradycardia', 'schwSyncope', 'schwDeaf', 'schwFamLQTS', 'schwFamSCD'],
+    calc: function (p, d) {
+      if (d.qtcB == null) return res({ missing: ['qt', 'hr'].filter(function (k) { return p[k] == null; }), hint: 'Enter the QT interval and heart rate.' });
+      var q = d.qtcB, items = [], s = 0;
+      var qPts = q >= 480 ? 3 : q >= 460 ? 2 : (q >= 450 && p.sex === 'male') ? 1 : 0;
+      if (qPts) { s += qPts; items.push('QTc ' + f0(q) + ' ms (' + qPts + ')'); }
+      var add2 = function (on, pts, label) { if (on) { s += pts; items.push(label + ' (' + pts + ')'); } };
+      add2(p.schwRecovery, 1, 'QTc ≥ 480 ms in the 4th minute of recovery');
+      if (p.schwTdP) { s += 2; items.push('torsade de pointes (2)'); }
+      add2(p.schwAlternans, 1, 'T-wave alternans');
+      add2(p.schwNotched, 1, 'notched T wave in 3 leads');
+      add2(p.schwBradycardia, 0.5, 'low heart rate for age');
+      if (p.schwSyncope === 'stress') { s += 2; items.push('syncope with stress (2)'); }
+      else if (p.schwSyncope === 'nostress') { s += 1; items.push('syncope without stress (1)'); }
+      add2(p.schwDeaf, 0.5, 'congenital deafness');
+      if (p.schwFamLQTS) { s += 1; items.push('family member with definite LQTS (1)'); }
+      else add2(p.schwFamSCD, 0.5, 'unexplained sudden death under 30 in an immediate family member');
+      var g = s <= 1 ? 0 : s <= 3 ? 1 : 3, lab = s <= 1 ? 'Low' : s <= 3 ? 'Intermediate' : 'High';
+      var w = [];
+      if (p.schwTdP && p.schwSyncope) w.push('Torsade de pointes and syncope are mutually exclusive in the original score; only one should be ticked.');
+      if (p.schwFamLQTS && p.schwFamSCD) w.push('The two family-history items are mutually exclusive; only the definite-LQTS point was counted.');
+      return res({ value: s, dp: s % 1 ? 1 : 0, unit: 'points', cat: g, catLabel: lab + ' probability', warn: w,
+        lines: [items.length ? items.join(' · ') : 'No items scored', 'Bands: ≤ 1 low · 1.5–3 intermediate · ≥ 3.5 high'],
+        action: s >= 3.5 ? 'High probability: refer for genetic testing and specialist assessment, and avoid QT-prolonging drugs.' : s >= 1.5 ? 'Intermediate: consider exercise testing, Holter, family screening and genetic testing.' : 'Low probability of congenital LQTS; look for acquired causes if the QT is long.',
+        summary: 'Schwartz LQTS score ' + s + ' (' + lab.toLowerCase() + ' probability)' });
+    },
+    source: 'Schwartz et al., Circulation 1993, updated 2011. QTc by Bazett, taken from the QTc card.',
+    status: 'new'
+  });
+
+  /* ===== Pregnancy and pulmonary hypertension ===== */
+  add({
+    id: 'carpreg', name: 'CARPREG II', domain: 'Cardiomyopathy and valve', scen: [],
+    blurb: 'Risk of a cardiac event during pregnancy in a woman with heart disease.',
+    inputs: ['cad', 'nyha', 'ef'],
+    local: ['cpPriorEvent', 'cpCyanosis', 'cpMechValve', 'cpVentDysf', 'cpValveLVOT', 'cpPAH', 'cpAortopathy', 'cpNoIntervention', 'cpLateAssess'],
+    calc: function (p) {
+      var cyan = p.cpCyanosis || p.nyha === '3' || p.nyha === '4';
+      var vd = p.cpVentDysf || (p.ef != null && p.ef < 55);
+      var it = [[p.cpPriorEvent, 3, 'prior cardiac event or arrhythmia'], [cyan, 3, 'NYHA III–IV or cyanosis'], [p.cpMechValve, 3, 'mechanical valve'],
+        [vd, 2, 'ventricular dysfunction'], [p.cpValveLVOT, 2, 'high-risk left-sided valve disease or LVOT obstruction'], [p.cpPAH, 2, 'pulmonary hypertension'],
+        [p.cad, 2, 'coronary artery disease'], [p.cpAortopathy, 2, 'high-risk aortopathy'], [p.cpNoIntervention, 1, 'no prior cardiac intervention'],
+        [p.cpLateAssess, 1, 'late pregnancy assessment']];
+      var s = 0, has = [];
+      it.forEach(function (x) { if (x[0]) { s += x[1]; has.push(x[2]); } });
+      var rate = s <= 1 ? 5 : s === 2 ? 10 : s === 3 ? 15 : s === 4 ? 22 : 41;
+      var c = s <= 1 ? 0 : s <= 2 ? 1 : s <= 4 ? 2 : 3;
+      return res({ value: s, unit: 'points', cat: c, catLabel: 'Event risk ' + rate + '%',
+        lines: ['Primary cardiac event during pregnancy ≈ ' + rate + '%', has.length ? 'Scored: ' + has.join(', ') : 'No items scored'],
+        action: s >= 4 ? 'High risk: care in a specialist pregnancy heart team, with a delivery plan agreed in advance.' : 'Use alongside the modified WHO classification, which is lesion-based and is what the ESC recommends for counselling.',
+        warn: ['The modified WHO classification is not in the app; CARPREG II does not replace it.'],
+        summary: 'CARPREG II ' + s + ' (cardiac event risk ' + rate + '%)' });
+    },
+    source: 'Silversides et al., J Am Coll Cardiol 2018; 2018 ESC guidelines on cardiovascular disease in pregnancy.',
+    status: 'new'
+  });
+
+  add({
+    id: 'pahrisk', name: 'ESC/ERS PAH risk', domain: 'Cardiomyopathy and valve', scen: [],
+    blurb: 'Four-strata risk in pulmonary arterial hypertension, used at follow-up to guide treatment escalation.',
+    inputs: ['ntprobnp', 'bnp'], local: ['pahFC', 'pah6mwd'],
+    calc: function (p) {
+      var pts = [], detail = [];
+      if (p.pahFC) { var f = { '1': 1, '2': 1, '3': 3, '4': 4 }[p.pahFC]; pts.push(f); detail.push('WHO FC ' + (p.pahFC === '1' ? 'I' : p.pahFC === '2' ? 'II' : p.pahFC === '3' ? 'III' : 'IV') + ' → ' + f); }
+      if (p.pah6mwd != null) { var d6 = p.pah6mwd > 440 ? 1 : p.pah6mwd >= 320 ? 2 : p.pah6mwd >= 165 ? 3 : 4; pts.push(d6); detail.push('6MWD ' + f0(p.pah6mwd) + ' m → ' + d6); }
+      if (p.ntprobnp != null) { var n = p.ntprobnp < 300 ? 1 : p.ntprobnp < 650 ? 2 : p.ntprobnp <= 1100 ? 3 : 4; pts.push(n); detail.push('NT-proBNP ' + f0(p.ntprobnp) + ' → ' + n); }
+      else if (p.bnp != null) { var b = p.bnp < 50 ? 1 : p.bnp < 200 ? 2 : p.bnp <= 800 ? 3 : 4; pts.push(b); detail.push('BNP ' + f0(p.bnp) + ' → ' + b); }
+      if (!pts.length) return res({ missing: ['pahFC'], hint: 'Enter WHO functional class, 6-minute walk distance, or a natriuretic peptide.' });
+      var mean = pts.reduce(function (a, b) { return a + b; }, 0) / pts.length, r = Math.round(mean);
+      var L = ['Low', 'Intermediate-low', 'Intermediate-high', 'High'][r - 1], c = [0, 1, 2, 3][r - 1];
+      return res({ value: L, text: true, cat: c, catLabel: 'Mean ' + mean.toFixed(2) + ' of ' + pts.length + (pts.length === 1 ? ' variable' : ' variables'),
+        lines: detail.concat(['1-year mortality ≈ ' + ['0–3', '2–7', '9–19', '> 20'][r - 1] + '%']),
+        warn: pts.length < 3 ? ['Based on ' + pts.length + ' of the 3 variables; the model expects all three.'] : [],
+        action: r === 1 ? 'Low risk: continue current therapy.' : r === 2 ? 'Intermediate-low: consider adding or escalating therapy, including a prostacyclin pathway agent.' : 'Intermediate-high or high: escalate therapy, add parenteral prostacyclin, and refer for transplant assessment.',
+        summary: 'ESC/ERS PAH risk: ' + L.toLowerCase() + ' (four-strata, mean ' + mean.toFixed(2) + ')' });
+    },
+    source: 'Humbert et al., 2022 ESC/ERS pulmonary hypertension guidelines, four-strata model (COMPERA 2.0). The three-strata baseline assessment uses a fuller multiparametric table that is not reproduced here.',
     status: 'new'
   });
 

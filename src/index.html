@@ -1,0 +1,33 @@
+<title>Cardiac Scores</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--PWA-->
+<style>/*CSS*/</style>
+<header class="top"><div class="in pad">
+  <div class="brand"><b>Cardiac Scores</b><span>Prof. Yasser Baghdady · risk scores from prevention to intervention</span></div>
+  <label class="search"><input id="q" type="search" placeholder="Search scores, e.g. HAS-BLED" aria-label="Search scores" autocomplete="off"></label>
+  <div class="tb">
+    <button type="button" data-units="conv" aria-pressed="true" title="mg/dL, µmol shown as mg/dL">mg/dL</button>
+    <button type="button" data-units="si" aria-pressed="false" title="mmol/L and µmol/L">SI</button>
+    <button type="button" data-act="example">Example</button>
+    <button type="button" data-act="new">New patient</button>
+  </div>
+</div></header>
+<nav class="views" aria-label="View"><div class="in pad">
+  <button type="button" data-view="patient" aria-pressed="false">Patient</button>
+  <button type="button" data-view="scores" aria-pressed="true">Scores</button>
+  <button type="button" data-view="summary" aria-pressed="false">Summary</button>
+</div></nav>
+<main class="wrap pad">
+  <aside id="profile" aria-label="Patient profile"></aside>
+  <section id="scorecol" aria-label="Scores">
+    <div class="colhead">
+      <div class="scen" id="scen" role="group" aria-label="Clinical scenario"></div>
+      <div class="vt" role="group" aria-label="View"><button type="button" data-view="scores" aria-pressed="true">Scores</button><button type="button" data-view="summary" aria-pressed="false">Summary</button></div>
+    </div>
+    <div id="cards"></div>
+    <p class="foot">Results support, and do not replace, clinical judgement. Nothing you enter leaves this device. Build 2 · <!--DATE--></p>
+  </section>
+  <section id="summary" aria-label="Summary"></section>
+</main>
+<div id="updbar" class="upd" hidden><span>A new version of Cardiac Scores is ready. Updating clears the current patient.</span><button type="button" class="btn" data-act="reload">Update now</button></div>
+<script>/*JS*/</script>

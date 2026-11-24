@@ -608,8 +608,63 @@ var UT = (function () {
     return { score: s, grade: g, label: ['Low', 'Moderate', 'High', 'Very high'][g], cin: [7.5, 14.0, 26.1, 57.3][g], dialysis: [0.04, 0.12, 1.09, 12.6][g] };
   }
 
+/* ===== Phase 3: heart failure, VTE, cardiomyopathy ===== */
+
+  /* MAGGIC (Pocock 2013). Creatinine in µmol/L. Point tables and the mortality
+     lookup both reproduce the MDCalc calculator exactly (51 patients, 24 Nov 2026). */
+  var MAGGIC_MORT = [[1.5, 3.9], [1.6, 4.3], [1.8, 4.8], [2.0, 5.2], [2.2, 5.8], [2.4, 6.3], [2.7, 7.0], [2.9, 7.7], [3.2, 8.4], [3.6, 9.2],
+    [3.9, 10.2], [4.3, 11.1], [4.8, 12.2], [5.2, 13.4], [5.8, 14.6], [6.3, 16.0], [7.0, 17.5], [7.7, 19.1], [8.4, 20.9], [9.3, 22.7],
+    [10.2, 24.7], [11.1, 26.9], [12.2, 29.2], [13.4, 31.6], [14.7, 34.2], [16.0, 36.9], [17.5, 39.7], [19.1, 42.7], [20.9, 45.8], [22.7, 49.0],
+    [24.8, 52.3], [26.9, 55.6], [29.2, 59.0], [31.6, 62.5], [34.2, 65.8], [36.9, 69.2], [39.8, 72.5], [42.7, 75.6], [45.8, 78.7], [49.0, 81.5],
+    [52.3, 84.2], [55.7, 86.6], [59.1, 88.9], [62.5, 90.8], [65.9, 92.6], [69.2, 94.1], [72.5, 95.3], [75.7, 96.4], [78.7, 97.3], [81.6, 98.0], [84.2, 98.5]];
+  function maggic(o) {
+    var st = o.ef < 30 ? 0 : o.ef < 40 ? 1 : 2;
+    var p = {
+      ef: band(o.ef, [19, 24, 29, 34, 39], [7, 6, 5, 3, 2, 0]),
+      age: band(o.age, [54, 59, 64, 69, 74, 79], [[0, 1, 2, 4, 6, 8, 10], [0, 2, 4, 6, 8, 10, 13], [0, 3, 5, 7, 9, 12, 15]][st]),
+      sbp: band(o.sbp, [109, 119, 129, 139, 149], [[5, 4, 3, 2, 1, 0], [3, 2, 1, 1, 0, 0], [2, 1, 1, 0, 0, 0]][st]),
+      bmi: band(o.bmi, [14, 19, 24, 29], [6, 5, 3, 2, 0]),
+      cr: band(o.cr, [89, 109, 129, 149, 169, 209, 249], [0, 1, 2, 3, 4, 5, 6, 8]),
+      nyha: [0, 0, 2, 6, 8][o.nyha || 1],
+      other: (o.male ? 1 : 0) + (o.smoker ? 1 : 0) + (o.dm ? 3 : 0) + (o.copd ? 2 : 0) + (o.hf18 ? 2 : 0) + (o.noBB ? 3 : 0) + (o.noACE ? 1 : 0)
+    };
+    var s = p.ef + p.age + p.sbp + p.bmi + p.cr + p.nyha + p.other;
+    var m = MAGGIC_MORT[Math.min(s, 50)];
+    return { score: s, parts: p, y1: m[0], y3: m[1], capped: s > 50 };
+  }
+
+  /* Wells scores */
+  function wellsPE(o) {
+    var s = (o.dvtSigns ? 3 : 0) + (o.peLikely ? 3 : 0) + (o.hr > 100 ? 1.5 : 0) + (o.immob ? 1.5 : 0) + (o.priorVTE ? 1.5 : 0) + (o.haemoptysis ? 1 : 0) + (o.cancer ? 1 : 0);
+    return { score: s, three: s < 2 ? 'Low' : s <= 6 ? 'Moderate' : 'High', rate3: s < 2 ? 1.3 : s <= 6 ? 16.2 : 40.6, two: s <= 4 ? 'PE unlikely' : 'PE likely' };
+  }
+  function wellsDVT(o) {
+    var s = (o.cancer ? 1 : 0) + (o.paralysis ? 1 : 0) + (o.bedridden ? 1 : 0) + (o.tender ? 1 : 0) + (o.legSwollen ? 1 : 0) + (o.calf3 ? 1 : 0) +
+      (o.pitting ? 1 : 0) + (o.collateral ? 1 : 0) + (o.priorDVT ? 1 : 0) - (o.altDx ? 2 : 0);
+    return { score: s, three: s <= 0 ? 'Low' : s <= 2 ? 'Moderate' : 'High', rate3: s <= 0 ? 5 : s <= 2 ? 17 : 53, two: s < 2 ? 'DVT unlikely' : 'DVT likely' };
+  }
+
+  /* PESI and simplified PESI (Aujesky 2005; Jiménez 2010) */
+  function pesi(o) {
+    var s = o.age + (o.male ? 10 : 0) + (o.cancer ? 30 : 0) + (o.hf ? 10 : 0) + (o.lung ? 10 : 0) +
+      (o.hr >= 110 ? 20 : 0) + (o.sbp < 100 ? 30 : 0) + (o.rr >= 30 ? 20 : 0) + (o.temp < 36 ? 20 : 0) + (o.altered ? 60 : 0) + (o.spo2 < 90 ? 20 : 0);
+    var cl = s <= 65 ? 0 : s <= 85 ? 1 : s <= 105 ? 2 : s <= 125 ? 3 : 4;
+    return { score: s, cls: cl, label: ['I', 'II', 'III', 'IV', 'V'][cl], rate: [1.6, 3.5, 7.1, 11.4, 24.5][cl] };
+  }
+  function spesi(o) {
+    var items = [];
+    if (o.age > 80) items.push('age > 80');
+    if (o.cancer) items.push('cancer');
+    if (o.cardioresp) items.push('chronic cardiopulmonary disease');
+    if (o.hr >= 110) items.push('HR ≥ 110');
+    if (o.sbp < 100) items.push('SBP < 100');
+    if (o.spo2 < 90) items.push('SpO₂ < 90%');
+    return { score: items.length, items: items, rate: items.length === 0 ? 1.0 : 10.9 };
+  }
+
   return { crcl: crcl, bsa: bsa, friedewald: friedewald, sampson: sampson, map: map, doac: doac, smart2: smart2,
-    crusade: crusade, tn01: tn01, TN: TN, precise: precise, euroscore: euroscore, mehran: mehran };
+    crusade: crusade, tn01: tn01, TN: TN, precise: precise, euroscore: euroscore, mehran: mehran,
+    maggic: maggic, wellsPE: wellsPE, wellsDVT: wellsDVT, pesi: pesi, spesi: spesi };
 })();
 
 
@@ -635,6 +690,9 @@ var DEF = (function () {
     sbp: N('Systolic BP', 'mmHg', { g: 'vit', min: 50, max: 260, step: 1 }),
     dbp: N('Diastolic BP', 'mmHg', { g: 'vit', min: 20, max: 160, step: 1 }),
     hr: N('Heart rate', 'bpm', { g: 'vit', min: 20, max: 250, step: 1 }),
+    rr: N('Respiratory rate', '/min', { g: 'vit', min: 4, max: 60, step: 1 }),
+    temp: N('Temperature', '°C', { g: 'vit', min: 30, max: 43 }),
+    spo2: N('SpO₂', '%', { g: 'vit', min: 40, max: 100, step: 1 }),
 
     tc: N('Total cholesterol', 'mg/dL', { g: 'lip', si: CHOL, min: 50, max: 600, step: 1 }),
     hdl: N('HDL', 'mg/dL', { g: 'lip', si: CHOL, min: 10, max: 200, step: 1 }),
@@ -666,6 +724,9 @@ var DEF = (function () {
     hf: B('Heart failure / LV dysfunction', { g: 'hx' }),
     priorBleed: B('Prior major bleeding', { g: 'hx' }),
     af: B('Atrial fibrillation', { g: 'hx' }),
+    cancer: B('Active malignancy', { g: 'hx' }),
+    copd: B('Chronic lung disease', { g: 'hx' }),
+    nyha: C('NYHA class', [['', 'Not assessed'], ['1', 'I'], ['2', 'II'], ['3', 'III'], ['4', 'IV']], { g: 'hx', def: '' }),
 
     ef: N('LV ejection fraction', '%', { g: 'ech', min: 5, max: 85, step: 1 }),
     eePrime: N('E/e′ (average)', '', { g: 'ech', min: 2, max: 50 }),
@@ -678,6 +739,8 @@ var DEF = (function () {
     rwt: N('Relative wall thickness', '', { g: 'ech', min: 0.1, max: 1.2 }),
     wallThick: N('Max wall thickness', 'mm', { g: 'ech', min: 4, max: 40 }),
     gls: N('GLS (absolute)', '%', { g: 'ech', min: 2, max: 30 }),
+    laDiam: N('LA diameter', 'mm', { g: 'ech', min: 15, max: 90, step: 1 }),
+    lvotGrad: N('Max LVOT gradient', 'mmHg', { g: 'ech', min: 0, max: 250, step: 1 }),
 
     ntprobnp: N('NT-proBNP', 'pg/mL', { g: 'ren', min: 5, max: 70000, step: 1 }),
     bnp: N('BNP', 'pg/mL', { g: 'ren', min: 2, max: 20000, step: 1 }),
@@ -688,6 +751,8 @@ var DEF = (function () {
     antiplatelet: B('Antiplatelet', { g: 'rx' }),
     anticoag: B('Anticoagulant', { g: 'rx' }),
     nsaid: B('NSAID', { g: 'rx' }),
+    bblocker: B('Beta blocker', { g: 'rx' }),
+    acei: B('ACE inhibitor or ARB', { g: 'rx' }),
 
     killip: C('Killip class', [['1', 'I'], ['2', 'II'], ['3', 'III'], ['4', 'IV']], { g: 'acs', def: '1' }),
     arrest: B('Cardiac arrest at admission', { g: 'acs' }),
@@ -766,7 +831,7 @@ var DEF = (function () {
     arcBleedMaj: B('Spontaneous bleeding needing hospitalisation or transfusion in past 6 months, or recurrent', { local: 1 }),
     arcDiath: B('Chronic bleeding diathesis', { local: 1 }),
     arcCirr: B('Liver cirrhosis with portal hypertension', { local: 1 }),
-    arcCancer: B('Active malignancy in past 12 months (not non-melanoma skin)', { local: 1 }),
+    arcCancer: B('Active malignancy in past 12 months (not non-melanoma skin)', { local: 1, auto: function (s) { return !!s.cancer; } }),
     arcICH: B('Spontaneous ICH ever, traumatic ICH in past 12 months, or brain AVM', { local: 1 }),
     arcStrokeMaj: B('Moderate or severe ischaemic stroke in past 6 months', { local: 1 }),
     arcSurg: B('Non-deferrable major surgery on DAPT, or major surgery or trauma in past 30 days', { local: 1 }),
@@ -781,19 +846,52 @@ var DEF = (function () {
     euArt: B('Extracardiac arteriopathy', { local: 1, auto: function (s) { return !!s.pad; } }),
     euMob: B('Poor mobility', { local: 1 }),
     euPrev: B('Previous cardiac surgery', { local: 1 }),
-    euLung: B('Chronic lung disease', { local: 1 }),
+    euLung: B('Chronic lung disease', { local: 1, auto: function (s) { return !!s.copd; } }),
     euEndo: B('Active endocarditis', { local: 1 }),
     euCrit: B('Critical pre-operative state', { local: 1 }),
     euIDDM: B('Diabetes on insulin', { local: 1, auto: function (s) { return !!(s.dm && s.insulin); } }),
     euCCS4: B('CCS class 4 angina', { local: 1 }),
     euMI: B('MI within 90 days', { local: 1 }),
     euAorta: B('Surgery on thoracic aorta', { local: 1 }),
-    euNyha: C('NYHA class', [['1', 'I'], ['2', 'II'], ['3', 'III'], ['4', 'IV']], { local: 1, def: '1' }),
+    euNyha: C('NYHA class', [['1', 'I'], ['2', 'II'], ['3', 'III'], ['4', 'IV']], { local: 1, autoDef: function (s) { return s.nyha || '1'; } }),
     euLV: C('LV function', [['good', 'Good (> 50%)'], ['mod', 'Moderate (31–50%)'], ['poor', 'Poor (21–30%)'], ['vpoor', 'Very poor (≤ 20%)']], { local: 1, autoDef: function (s) { return s.ef == null ? 'good' : s.ef > 50 ? 'good' : s.ef > 30 ? 'mod' : s.ef > 20 ? 'poor' : 'vpoor'; } }),
     euPH: C('PA systolic pressure', [['none', '< 31 mmHg'], ['mod', '31–55 mmHg'], ['sev', '> 55 mmHg']], { local: 1, def: 'none' }),
     euUrg: C('Urgency', [['elective', 'Elective'], ['urgent', 'Urgent'], ['emergency', 'Emergency'], ['salvage', 'Salvage']], { local: 1, def: 'elective' }),
     euWt: C('Weight of procedure', [['cabg', 'Isolated CABG'], ['single', 'Single non-CABG'], ['two', '2 procedures'], ['three', '3 or more']], { local: 1, def: 'cabg' }),
     qt: N('QT interval', 'ms', { local: 1, min: 200, max: 800, step: 1 }),
+    hf18: B('Heart failure first diagnosed 18 months ago or more', { local: 1 }),
+    peDvtSigns: B('Clinical signs of DVT', { local: 1 }),
+    peLikely: B('PE is the most likely diagnosis', { local: 1 }),
+    peImmob: B('Immobilisation 3 days or more, or surgery in past 4 weeks', { local: 1 }),
+    priorVTE: B('Previous PE or DVT', { local: 1 }),
+    haemoptysis: B('Haemoptysis', { local: 1 }),
+    dvtParalysis: B('Paralysis, paresis or recent plaster cast', { local: 1 }),
+    dvtBedridden: B('Bedridden 3 days or more, or major surgery in past 12 weeks', { local: 1 }),
+    dvtTender: B('Tenderness along the deep veins', { local: 1 }),
+    dvtLegSwollen: B('Entire leg swollen', { local: 1 }),
+    dvtCalf3: B('Calf more than 3 cm larger than the other side', { local: 1 }),
+    dvtPitting: B('Pitting oedema in the symptomatic leg only', { local: 1 }),
+    dvtCollateral: B('Collateral superficial veins (not varicose)', { local: 1 }),
+    priorDVT: B('Previously documented DVT', { local: 1, auto: function (s) { return !!s.priorVTE; } }),
+    dvtAltDx: B('Alternative diagnosis at least as likely (−2)', { local: 1 }),
+    altered: B('Altered mental status', { local: 1 }),
+    haemoUnstable: B('Haemodynamic instability (arrest, obstructive shock or persistent hypotension)', { local: 1 }),
+    rvDysfunction: B('RV dysfunction on echo or CT', { local: 1 }),
+    peTroponin: B('Raised troponin', { local: 1, auto: function (s) { return !!s.enz; } }),
+    famSCD: B('Family history of sudden cardiac death', { local: 1 }),
+    nsvt: B('Non-sustained VT', { local: 1 }),
+    unexpSyncope: B('Unexplained syncope', { local: 1 }),
+    dukeMicro1: B('Major: typical organisms from 2 or more separate blood cultures', { local: 1 }),
+    dukeMicro2: B('Major: persistently positive cultures, or Coxiella, Bartonella or T. whipplei', { local: 1 }),
+    dukeImaging: B('Major: vegetation, abscess, pseudoaneurysm, new dehiscence, or abnormal PET/CT activity', { local: 1 }),
+    dukeSurgical: B('Major: endocarditis confirmed at surgery or on pathology', { local: 1 }),
+    dukePredispose: B('Minor: predisposing heart condition or injection drug use', { local: 1 }),
+    dukeFever: B('Minor: fever above 38 °C', { local: 1 }),
+    dukeVascular: B('Minor: vascular phenomena', { local: 1 }),
+    dukeImmune: B('Minor: immunological phenomena', { local: 1 }),
+    dukeMicroMinor: B('Minor: microbiological evidence short of a major criterion', { local: 1 }),
+    dukeImagingMinor: B('Minor: imaging evidence short of a major criterion', { local: 1 }),
+    dukePhysExam: B('Minor: new valvular regurgitation on examination', { local: 1 }),
     twoAntiHTN: B('On 2 or more antihypertensive medicines', { local: 1 }),
     convVal: N('Value', '', { local: 1, nosi: 1 }),
     convAn: C('Test', [['chol', 'Cholesterol'], ['tg', 'Triglycerides'], ['cr', 'Creatinine'], ['glu', 'Glucose'], ['hb', 'Haemoglobin']], { local: 1, def: 'chol' }),
@@ -1440,6 +1538,162 @@ var DEF = (function () {
     status: 'new'
   });
 
+  add({
+    id: 'maggic', name: 'MAGGIC', domain: 'Heart failure', scen: ['hf'],
+    blurb: '1- and 3-year mortality in chronic heart failure, from 13 variables.',
+    inputs: ['age', 'sex', 'ef', 'sbp', 'wt', 'ht', 'cr', 'nyha', 'dm', 'copd', 'smoker', 'bblocker', 'acei'], local: ['hf18'],
+    calc: function (p, d) {
+      var m = need(p, ['age', 'sex', 'ef', 'sbp', 'cr', 'nyha']);
+      if (d.bmi == null) ['wt', 'ht'].forEach(function (k) { if (p[k] == null) m.push(k); });
+      if (m.length) return res({ missing: m });
+      var r = UT.maggic({ ef: p.ef, age: p.age, sbp: p.sbp, bmi: d.bmi, cr: p.cr * 88.4, nyha: +p.nyha, male: p.sex === 'male',
+        smoker: p.smoker, dm: p.dm, copd: p.copd, hf18: p.hf18, noBB: !p.bblocker, noACE: !p.acei }), b = r.parts;
+      var c = r.y1 < 5 ? 0 : r.y1 < 15 ? 1 : r.y1 < 30 ? 2 : 3;
+      return res({ value: r.score, unit: 'points', cat: c, catLabel: CAT4[c] + ' risk',
+        lines: ['1-year mortality ' + r.y1 + '% · 3-year ' + r.y3 + '%',
+          'EF ' + b.ef + ' · age ' + b.age + ' · SBP ' + b.sbp + ' · BMI ' + b.bmi + ' · creatinine ' + b.cr + ' · NYHA ' + b.nyha + ' · other ' + b.other],
+        warn: (r.capped ? ['Score above 50 is reported at the table maximum.'] : []).concat(!p.bblocker || !p.acei ? ['Scored as not on ' + [!p.bblocker ? 'a beta blocker' : '', !p.acei ? 'an ACE inhibitor or ARB' : ''].filter(Boolean).join(' or ') + '; tick them in the profile if prescribed.'] : []),
+        action: 'Derived in chronic heart failure across the EF range; use for prognosis, not for treatment choices.',
+        summary: 'MAGGIC ' + r.score + ' (1-yr mortality ' + r.y1 + '%, 3-yr ' + r.y3 + '%)' });
+    },
+    source: 'Pocock et al., Eur Heart J 2013. Creatinine converted to µmol/L internally.',
+    status: 'verified', verifiedBy: 'MDCalc MAGGIC (51 patients covering every score from 0 to 50, points and both mortalities exact)', checked: '2026-11-24'
+  });
+
+  /* ===== VTE and pulmonary embolism ===== */
+  add({
+    id: 'wellspe', name: 'Wells score for PE', domain: 'VTE and pulmonary embolism', scen: ['pe'],
+    blurb: 'Clinical probability of pulmonary embolism.',
+    inputs: ['hr', 'cancer'], local: ['peDvtSigns', 'peLikely', 'peImmob', 'priorVTE', 'haemoptysis'],
+    calc: function (p) {
+      if (p.hr == null) return res({ missing: ['hr'] });
+      var r = UT.wellsPE({ dvtSigns: p.peDvtSigns, peLikely: p.peLikely, hr: p.hr, immob: p.peImmob, priorVTE: p.priorVTE, haemoptysis: p.haemoptysis, cancer: p.cancer });
+      var c = r.score < 2 ? 0 : r.score <= 6 ? 1 : 3;
+      return res({ value: r.score, unit: '/ 12.5', cat: c, catLabel: r.three + ' probability',
+        lines: ['Two-tier: ' + r.two + ' (cut-off 4)', 'PE prevalence in this band ≈ ' + r.rate3 + '%'],
+        action: r.two === 'PE unlikely' ? 'PE unlikely: a negative D-dimer rules out PE without imaging.' : 'PE likely: go straight to CT pulmonary angiography.',
+        summary: 'Wells PE ' + r.score + ' (' + r.three.toLowerCase() + ' probability, ' + r.two.toLowerCase() + ')' });
+    },
+    source: 'Wells et al., Thromb Haemost 2000; 2019 ESC pulmonary embolism guidelines.',
+    status: 'new'
+  });
+
+  add({
+    id: 'wellsdvt', name: 'Wells score for DVT', domain: 'VTE and pulmonary embolism', scen: ['pe'],
+    blurb: 'Clinical probability of deep vein thrombosis.',
+    inputs: ['cancer'], local: ['dvtParalysis', 'dvtBedridden', 'dvtTender', 'dvtLegSwollen', 'dvtCalf3', 'dvtPitting', 'dvtCollateral', 'priorDVT', 'dvtAltDx'],
+    calc: function (p) {
+      var r = UT.wellsDVT({ cancer: p.cancer, paralysis: p.dvtParalysis, bedridden: p.dvtBedridden, tender: p.dvtTender, legSwollen: p.dvtLegSwollen,
+        calf3: p.dvtCalf3, pitting: p.dvtPitting, collateral: p.dvtCollateral, priorDVT: p.priorDVT, altDx: p.dvtAltDx });
+      var c = r.score <= 0 ? 0 : r.score <= 2 ? 1 : 3;
+      return res({ value: r.score, unit: 'points', cat: c, catLabel: r.three + ' probability',
+        lines: ['Two-tier: ' + r.two + ' (cut-off 2)', 'DVT prevalence in this band ≈ ' + r.rate3 + '%'],
+        action: r.two === 'DVT unlikely' ? 'DVT unlikely: a negative D-dimer rules out DVT without ultrasound.' : 'DVT likely: proximal compression ultrasound.',
+        summary: 'Wells DVT ' + r.score + ' (' + r.three.toLowerCase() + ' probability, ' + r.two.toLowerCase() + ')' });
+    },
+    source: 'Wells et al., Lancet 1997 / NEJM 2003.',
+    status: 'new'
+  });
+
+  add({
+    id: 'pesi', name: 'PESI and sPESI', domain: 'VTE and pulmonary embolism', scen: ['pe'],
+    blurb: '30-day mortality after acute PE; sPESI shown alongside.',
+    inputs: ['age', 'sex', 'hr', 'sbp', 'rr', 'temp', 'spo2', 'cancer', 'hf', 'copd'], local: ['altered'],
+    calc: function (p) {
+      var m = need(p, ['age', 'sex', 'hr', 'sbp']);
+      if (m.length) return res({ missing: m });
+      var r = UT.pesi({ age: p.age, male: p.sex === 'male', cancer: p.cancer, hf: p.hf, lung: p.copd, hr: p.hr, sbp: p.sbp,
+        rr: p.rr == null ? 0 : p.rr, temp: p.temp == null ? 37 : p.temp, altered: p.altered, spo2: p.spo2 == null ? 100 : p.spo2 });
+      var sp = UT.spesi({ age: p.age, cancer: p.cancer, cardioresp: p.hf || p.copd, hr: p.hr, sbp: p.sbp, spo2: p.spo2 == null ? 100 : p.spo2 });
+      var unk = ['rr', 'temp', 'spo2'].filter(function (k) { return p[k] == null; });
+      return res({ value: r.score, unit: 'points', cat: [0, 0, 1, 2, 3][r.cls], catLabel: 'Class ' + r.label,
+        lines: ['30-day mortality ≈ ' + r.rate + '%', 'sPESI ' + sp.score + (sp.items.length ? ' (' + sp.items.join(', ') + ')' : ' — low risk, 30-day mortality ≈ 1%')],
+        warn: unk.length ? ['Not entered, so scored as normal: ' + unk.map(function (k) { return F[k].label; }).join(', ') + '.'] : [],
+        action: r.cls <= 1 && sp.score === 0 ? 'PESI class I–II and sPESI 0: low risk, suitable for early discharge or home treatment if no RV dysfunction.' : 'PESI class III–V or sPESI ≥ 1: admit; assess RV function and troponin.',
+        summary: 'PESI ' + r.score + ' (class ' + r.label + ', 30-day mortality ' + r.rate + '%), sPESI ' + sp.score });
+    },
+    source: 'Aujesky et al., Am J Respir Crit Care Med 2005; Jiménez et al., Arch Intern Med 2010.',
+    status: 'new'
+  });
+
+  add({
+    id: 'escpe', name: 'ESC PE risk class', domain: 'VTE and pulmonary embolism', scen: ['pe'],
+    blurb: 'Early mortality risk in acute PE: high, intermediate-high, intermediate-low or low.',
+    inputs: ['age', 'sex', 'hr', 'sbp', 'rr', 'temp', 'spo2', 'cancer', 'hf', 'copd'], local: ['haemoUnstable', 'rvDysfunction', 'peTroponin', 'altered'],
+    calc: function (p) {
+      var m = need(p, ['age', 'sex', 'hr', 'sbp']);
+      if (m.length) return res({ missing: m });
+      var r = UT.pesi({ age: p.age, male: p.sex === 'male', cancer: p.cancer, hf: p.hf, lung: p.copd, hr: p.hr, sbp: p.sbp,
+        rr: p.rr == null ? 0 : p.rr, temp: p.temp == null ? 37 : p.temp, altered: p.altered, spo2: p.spo2 == null ? 100 : p.spo2 });
+      var sp = UT.spesi({ age: p.age, cancer: p.cancer, cardioresp: p.hf || p.copd, hr: p.hr, sbp: p.sbp, spo2: p.spo2 == null ? 100 : p.spo2 });
+      var notLow = r.cls >= 2 || sp.score >= 1, both = p.rvDysfunction && p.peTroponin;
+      var cls, cat, act;
+      if (p.haemoUnstable) { cls = 'High'; cat = 3; act = 'High risk: primary reperfusion (systemic thrombolysis, or catheter or surgical embolectomy) and haemodynamic support.'; }
+      else if (notLow && both) { cls = 'Intermediate-high'; cat = 2; act = 'Intermediate-high: admit to a monitored bed; anticoagulate and watch for decompensation, with rescue reperfusion ready.'; }
+      else if (notLow) { cls = 'Intermediate-low'; cat = 1; act = 'Intermediate-low: admit and anticoagulate.'; }
+      else { cls = 'Low'; cat = 0; act = 'Low risk: consider early discharge and treatment at home if the Hestia criteria are met.'; }
+      var L = ['PESI class ' + r.label + ' · sPESI ' + sp.score];
+      L.push(!p.rvDysfunction && !p.peTroponin ? 'RV function and troponin not recorded' : 'RV dysfunction ' + (p.rvDysfunction ? 'yes' : 'no') + ' · troponin ' + (p.peTroponin ? 'raised' : 'normal'));
+      if (!p.haemoUnstable && notLow && !both && (p.rvDysfunction || p.peTroponin)) L.push('Only one of RV dysfunction and raised troponin: still intermediate-low.');
+      return res({ value: cls, text: true, cat: cat, catLabel: 'ESC 2019 class', lines: L, action: act,
+        warn: !p.haemoUnstable && !p.rvDysfunction && !p.peTroponin ? ['Echo or CT RV assessment and troponin not recorded: classed on PESI alone.'] : [],
+        summary: 'ESC PE risk: ' + cls.toLowerCase() + ' (PESI ' + r.label + ', sPESI ' + sp.score + ')' });
+    },
+    source: 'Konstantinides et al., 2019 ESC guidelines on acute pulmonary embolism, Table 8.',
+    status: 'new'
+  });
+
+  /* ===== Cardiomyopathy and endocarditis ===== */
+  add({
+    id: 'hcmscd', name: 'HCM Risk-SCD', domain: 'Cardiomyopathy and valve', scen: [],
+    blurb: '5-year risk of sudden cardiac death in hypertrophic cardiomyopathy, to guide ICD decisions.',
+    inputs: ['age', 'wallThick', 'laDiam', 'lvotGrad'], local: ['famSCD', 'nsvt', 'unexpSyncope'],
+    calc: function (p) {
+      var m = need(p, ['age', 'wallThick', 'laDiam', 'lvotGrad']);
+      if (m.length) return res({ missing: m });
+      var pi = 0.15939858 * p.wallThick - 0.00294271 * p.wallThick * p.wallThick + 0.0259082 * p.laDiam + 0.00446131 * p.lvotGrad +
+        0.4583082 * (p.famSCD ? 1 : 0) + 0.82639195 * (p.nsvt ? 1 : 0) + 0.71650361 * (p.unexpSyncope ? 1 : 0) - 0.01799934 * p.age;
+      var v = 100 * (1 - Math.pow(0.998, Math.exp(pi)));
+      var c = v < 4 ? 0 : v < 6 ? 1 : 3;
+      var w = [];
+      if (p.wallThick < 10 || p.wallThick > 35) w.push('Validated for maximal wall thickness 10–35 mm.');
+      if (p.age < 16) w.push('Not validated under 16 years; use the paediatric model.');
+      return res({ value: v, unit: '% at 5 years', cat: c, catLabel: ['Low', 'Intermediate', '', 'High'][c], warn: w,
+        lines: ['Wall thickness ' + f1(p.wallThick) + ' mm · LA ' + f1(p.laDiam) + ' mm · LVOT gradient ' + f0(p.lvotGrad) + ' mmHg' +
+          (p.famSCD ? ' · family history of SCD' : '') + (p.nsvt ? ' · NSVT' : '') + (p.unexpSyncope ? ' · unexplained syncope' : '')],
+        action: c === 3 ? 'ESC 2023: 5-year risk ≥ 6%, an ICD should be considered (IIa).' : c === 1 ? 'ESC 2023: 5-year risk 4 to < 6%, an ICD may be considered (IIb).' : 'ESC 2023: 5-year risk < 4%, an ICD is generally not indicated unless other features are present.',
+        summary: 'HCM Risk-SCD ' + f1(v) + '% at 5 years (' + ['low', 'intermediate', '', 'high'][c] + ')' });
+    },
+    source: 'O’Mahony et al., Eur Heart J 2014; thresholds from the 2023 ESC cardiomyopathy guidelines. Excludes patients after cardiac arrest, with sustained VT, EF < 50%, apical aneurysm or recent myectomy or alcohol ablation.',
+    status: 'new'
+  });
+
+  add({
+    id: 'duke', name: 'Duke-ISCVID criteria', domain: 'Cardiomyopathy and valve', scen: [],
+    blurb: '2023 Duke-ISCVID criteria for infective endocarditis: definite, possible or rejected.',
+    inputs: [],
+    local: ['dukeMicro1', 'dukeMicro2', 'dukeImaging', 'dukeSurgical', 'dukePredispose', 'dukeFever', 'dukeVascular', 'dukeImmune', 'dukeMicroMinor', 'dukeImagingMinor', 'dukePhysExam'],
+    calc: function (p) {
+      var majList = [['dukeMicro1', 'typical organisms from 2 or more separate blood cultures'], ['dukeMicro2', 'persistently positive cultures, or Coxiella, Bartonella or T. whipplei'],
+        ['dukeImaging', 'imaging: vegetation, abscess, pseudoaneurysm, new dehiscence or abnormal PET/CT activity'], ['dukeSurgical', 'endocarditis confirmed at surgery or on pathology']];
+      var minList = [['dukePredispose', 'predisposing heart condition or injection drug use'], ['dukeFever', 'fever above 38 °C'], ['dukeVascular', 'vascular phenomena (emboli, mycotic aneurysm, Janeway lesions)'],
+        ['dukeImmune', 'immunological phenomena (glomerulonephritis, Osler nodes, Roth spots, rheumatoid factor)'], ['dukeMicroMinor', 'microbiological evidence not meeting a major criterion'],
+        ['dukeImagingMinor', 'imaging evidence not meeting a major criterion'], ['dukePhysExam', 'new valvular regurgitation on examination']];
+      var maj = majList.filter(function (x) { return p[x[0]]; }), min = minList.filter(function (x) { return p[x[0]]; });
+      var M = maj.length, N = min.length;
+      var v, c, act;
+      if (M >= 2 || (M === 1 && N >= 3) || N >= 5) { v = 'Definite'; c = 3; act = 'Definite endocarditis: treat as such, and refer to the endocarditis team.'; }
+      else if ((M === 1 && N >= 1) || N >= 3) { v = 'Possible'; c = 1; act = 'Possible endocarditis: repeat blood cultures and imaging (TOE, PET/CT or cardiac CT) before deciding.'; }
+      else { v = 'Rejected'; c = 0; act = 'Criteria not met. A firm alternative diagnosis, resolution within 4 days of antibiotics, or no pathology at surgery would reject the diagnosis outright.'; }
+      return res({ value: v, text: true, cat: c, catLabel: M + ' major · ' + N + ' minor',
+        lines: [M ? 'Major: ' + maj.map(function (x) { return x[1]; }).join('; ') : 'No major criteria', N ? 'Minor: ' + min.map(function (x) { return x[1]; }).join('; ') : 'No minor criteria'],
+        action: act,
+        summary: 'Duke-ISCVID: ' + v.toLowerCase() + ' endocarditis (' + M + ' major, ' + N + ' minor)' });
+    },
+    source: 'Fowler et al., Clin Infect Dis 2023 (2023 Duke-ISCVID criteria). Definite: 2 major, or 1 major + 3 minor, or 5 minor. Possible: 1 major + 1 minor, or 3 minor.',
+    status: 'new'
+  });
+
   /* ===== Utilities ===== */
   add({
     id: 'kidney', name: 'Kidney function', domain: 'Utilities', scen: ['prev', 'af', 'acs', 'pci', 'surg', 'preop'],
@@ -1523,7 +1777,7 @@ var DEF = (function () {
   });
 
   var SCEN = [
-    ['all', 'All scores'], ['fav', 'Favourites'], ['prev', 'Prevention visit'], ['af', 'New AF'], ['acs', 'ACS admission'], ['hf', 'Heart failure'], ['pci', 'PCI / cath lab'], ['surg', 'Cardiac surgery'], ['preop', 'Pre-op']
+    ['all', 'All scores'], ['fav', 'Favourites'], ['prev', 'Prevention visit'], ['af', 'New AF'], ['acs', 'ACS admission'], ['hf', 'Heart failure'], ['pe', 'Suspected PE'], ['pci', 'PCI / cath lab'], ['surg', 'Cardiac surgery'], ['preop', 'Pre-op']
   ];
 
   function compute(state) {
